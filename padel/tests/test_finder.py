@@ -6,8 +6,15 @@ import pytest
 from conftest import FIXTURES, load_fixture
 
 import finder
+from padelmates import (
+    BookingSiteError,
+    PadelMatesClient,
+    ShapeError,
+    day_window,
+    load_club,
+    parse_slots,
+)
 from parser import LONDON
-from playtomic import PlaytomicClient, PlaytomicError, ShapeError, parse_availability
 
 MON_NOON = datetime(2026, 10, 19, 12, 0, tzinfo=LONDON)
 
@@ -18,23 +25,40 @@ def london(d, h, m=0):
 
 def day_slots(club, day: str):
     d = date.fromisoformat(day)
-    return [s for s in parse_availability(load_fixture(f"sample_availability_{day}.json"), club) if s.start.date() == d]
+    return [s for s in parse_slots(load_fixture(f"sample_slots_{day}.json"), club) if s.start.date() == d]
 
 
-def test_tenant_parsing(club):
+def test_club_file(club):
     assert club.name == "Padium Canary Wharf"
-    assert club.url == "https://playtomic.com/clubs/padium-canary-wharf"
-    assert len(club.courts) == 8  # inactive court dropped
-    kinds = {c.name: c.kind for c in club.courts.values()}
-    assert kinds["Court 3"] == "indoor" and kinds["Court 8"] == "outdoor"
+    assert club.url == "https://padelmates.se/club/0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+    assert club.courts["Court 3"].kind == "indoor" and club.courts["Court 8"].kind == "outdoor"
 
 
-def test_utc_slots_become_london_time(club):
+def test_load_club_checks_env_id(monkeypatch):
+    monkeypatch.setenv("PADIUM_CLUB_ID", "someone-else")
+    with pytest.raises(SystemExit):
+        load_club(FIXTURES / "sample_club.json")
+
+
+def test_timestamps_become_london_time(club):
     slots = day_slots(club, "2026-10-24")
-    assert min(s.start for s in slots) == london(24, 7)  # 06:00Z in BST
-    assert all(s.start.date() == date(2026, 10, 24) for s in slots)  # 23:00Z is Sunday in London
+    assert min(s.start for s in slots) == london(24, 7)
+    assert all(s.start.date() == date(2026, 10, 24) for s in slots)  # 00:00 Sunday dropped
     mon = day_slots(club, "2026-10-26")
-    assert min(s.start for s in mon) == datetime(2026, 10, 26, 7, tzinfo=LONDON)  # GMT: no shift
+    assert min(s.start for s in mon) == datetime(2026, 10, 26, 7, tzinfo=LONDON)
+
+
+def test_reserved_slots_are_not_free(club):
+    assert not [s for s in day_slots(club, "2026-10-24") if s.court.name == "Court 5"]
+    assert day_slots(club, "2026-10-25") == []
+
+
+def test_day_window_spans_local_midnights():
+    start, end = day_window(date(2026, 10, 24))
+    assert (end - start) / 3_600_000 == 24
+    assert datetime.fromtimestamp(start / 1000, LONDON) == london(24, 0)
+    start, end = day_window(date(2026, 10, 25))  # clocks go back: 25 hour day
+    assert (end - start) / 3_600_000 == 25
 
 
 def test_exact_match(club):
@@ -45,7 +69,7 @@ def test_exact_match(club):
     assert text.splitlines() == [
         "🎾 <b>Padium Canary Wharf</b>, Sat 24 Oct",
         "✅ <b>18:00 free:</b> Court 3 (indoor) 60/90 min £80/£120 · Court 8 (outdoor) 60 min £60",
-        '<a href="https://playtomic.com/clubs/padium-canary-wharf">Book in Playtomic</a>',
+        '<a href="https://padelmates.se/club/0f1e2d3c4b5a69788796a5b4c3d2e1f0">Book in Padel Mates</a>',
     ]
 
 
@@ -86,8 +110,9 @@ def test_fully_booked_next_day_too(club):
 
 def test_unknown_court_still_counts(club):
     groups = finder.group(day_slots(club, "2026-10-26"), MON_NOON)
-    names = [o.court.name for o in groups[datetime(2026, 10, 26, 8, tzinfo=LONDON)]]
-    assert names == ["Court 7", "Court ?"]
+    offers = groups[datetime(2026, 10, 26, 8, tzinfo=LONDON)]
+    assert [(o.court.name, o.court.kind) for o in offers] == [("Centre Court", None), ("Court 7", "indoor")]
+    assert finder.fmt_offer(offers[0]) == "Centre Court 60 min £40"
 
 
 def test_earliest_and_render_next(club):
@@ -100,7 +125,7 @@ def test_earliest_and_render_next(club):
 
 
 def test_court_names_sorted_naturally_and_escaped(club):
-    from playtomic import Court, Slot
+    from padelmates import Court, Slot
     t = london(24, 18)
     slots = [Slot(t, 60, "80 GBP", Court("a", "Court 10")), Slot(t, 60, "80 GBP", Court("b", "Court 2 <VIP>"))]
     m = finder.match(slots, t, MON_NOON)
@@ -117,7 +142,7 @@ def test_price(raw, out):
 # --- client: caching, errors, shape changes ---------------------------------
 
 def make_client(club, handler):
-    return PlaytomicClient(club, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return PadelMatesClient(club, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 
 
 async def test_client_fetches_once_per_day_and_caches(club):
@@ -125,20 +150,19 @@ async def test_client_fetches_once_per_day_and_caches(club):
 
     def handler(request):
         calls.append(dict(request.url.params))
-        day = request.url.params["date"]
-        return httpx.Response(200, json=load_fixture(f"sample_availability_{day}.json"))
+        return httpx.Response(200, json=load_fixture("sample_slots_2026-10-24.json"))
 
     client = make_client(club, handler)
     a = await client.day(date(2026, 10, 24))
     b = await client.day(date(2026, 10, 24))
     assert a is b and len(calls) == 1
-    assert calls[0] == {"tenant_id": club.tenant_id, "sport_id": "PADEL", "date": "2026-10-24"}
-    assert all(s.start.date() == date(2026, 10, 24) for s in a)
+    start, end = day_window(date(2026, 10, 24))
+    assert calls[0] == {"club_id": club.club_id, "start_datetime": str(start), "end_datetime": str(end), "lang": "en"}
 
 
 async def test_client_http_error(club):
     client = make_client(club, lambda r: httpx.Response(503, text="down"))
-    with pytest.raises(PlaytomicError):
+    with pytest.raises(BookingSiteError):
         await client.day(date(2026, 10, 24))
 
 
@@ -146,11 +170,12 @@ async def test_client_network_error(club):
     def boom(request):
         raise httpx.ConnectTimeout("timeout", request=request)
 
-    with pytest.raises(PlaytomicError):
+    with pytest.raises(BookingSiteError):
         await make_client(club, boom).day(date(2026, 10, 24))
 
 
-@pytest.mark.parametrize("payload", [{"error": "x"}, [{"slots": []}], [{"resource_id": "a", "start_date": "2026-10-24", "slots": [{"duration": 60}]}]])
+@pytest.mark.parametrize("payload", [[], {"error": "x"}, {"allSlots": [{"duration": 60}]},
+                                     {"allSlots": [{"courtName": "C", "duration": 60, "startTimestamp": "soon"}]}])
 async def test_client_shape_change(club, payload):
     with pytest.raises(ShapeError):
         await make_client(club, lambda r: httpx.Response(200, json=payload)).day(date(2026, 10, 24))
@@ -158,11 +183,9 @@ async def test_client_shape_change(club, payload):
 
 def test_live_fixtures_parse(club):
     """Real responses saved by `probe.py --write` must still parse."""
-    live = sorted(FIXTURES.glob("live_availability_*.json"))
+    live = sorted(FIXTURES.glob("live_slots_*.json"))
     if not live:
         pytest.skip("no live fixtures yet: run probe.py --write")
-    from playtomic import club_from_tenant
-    real_club = club_from_tenant(json.loads((FIXTURES / "live_tenant.json").read_text()))
     for f in live:
-        slots = parse_availability(json.loads(f.read_text()), real_club)
-        assert all(s.court.name != "Court ?" for s in slots), f"{f.name}: unknown resource ids"
+        raw = json.loads(f.read_text())
+        assert parse_slots(raw, club) or all(s.get("reservedIntersection") for s in raw["allSlots"])

@@ -4,21 +4,22 @@ import httpx
 from conftest import FIXTURES, load_fixture
 
 import bot
+from padelmates import PadelMatesClient
 from parser import LONDON
-from playtomic import PlaytomicClient
 
 MON_NOON = datetime(2026, 10, 19, 12, 0, tzinfo=LONDON)
 
 
 def fixture_client(club, calls=None):
     def handler(request):
-        day = request.url.params["date"]
+        start = int(request.url.params["start_datetime"])
+        day = datetime.fromtimestamp(start / 1000, LONDON).date().isoformat()
         if calls is not None:
             calls.append(day)
-        f = FIXTURES / f"sample_availability_{day}.json"
-        return httpx.Response(200, json=load_fixture(f.name) if f.exists() else [])
+        f = FIXTURES / f"sample_slots_{day}.json"
+        return httpx.Response(200, json=load_fixture(f.name) if f.exists() else {"allSlots": []})
 
-    return PlaytomicClient(club, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    return PadelMatesClient(club, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 
 
 async def test_answer_slot_exact(club):

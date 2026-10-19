@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
 sys.path.insert(0, str(ROOT))
 
-from playtomic import club_from_tenant
+from padelmates import load_club
 
 
 def load_fixture(name: str):
@@ -17,4 +17,4 @@ def load_fixture(name: str):
 
 @pytest.fixture
 def club():
-    return club_from_tenant(load_fixture("sample_tenant.json"))
+    return load_club(FIXTURES / "sample_club.json", club_id="")

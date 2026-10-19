@@ -5,4 +5,4 @@ GitHub Actions workflow.
 
 | bot | what | deploy |
 |---|---|---|
-| [`padel/`](padel/) | @padelbloksbot: `/padel sat 18:00` finds free courts at Padium Canary Wharf | `.github/workflows/padel.yml` → `/opt/padel-bot` (systemd `padel-bot`) |
+| [`padel/`](padel/) | @padelbloksbot: `/padel sat 18:00` finds free courts at Padium Canary Wharf (via Padel Mates) | `.github/workflows/padel.yml` → `/opt/padel-bot` (systemd `padel-bot`) |

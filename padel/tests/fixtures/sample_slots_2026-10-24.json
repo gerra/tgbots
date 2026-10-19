@@ -1,0 +1,116 @@
+{
+  "allSlots": [
+    {
+      "courtName": "Court 3",
+      "duration": 60,
+      "price": 60,
+      "startTimestamp": 1792821600000,
+      "startTime": "2026-10-24T06:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 8",
+      "duration": 60,
+      "price": 60,
+      "startTimestamp": 1792857600000,
+      "startTime": "2026-10-24T16:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 1",
+      "duration": 90,
+      "price": 120,
+      "startTimestamp": 1792857600000,
+      "startTime": "2026-10-24T16:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 3",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792861200000,
+      "startTime": "2026-10-24T17:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 3",
+      "duration": 90,
+      "price": 120,
+      "startTimestamp": 1792861200000,
+      "startTime": "2026-10-24T17:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 3",
+      "duration": 120,
+      "price": 160,
+      "startTimestamp": 1792861200000,
+      "startTime": "2026-10-24T17:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 8",
+      "duration": 60,
+      "price": 60,
+      "startTimestamp": 1792861200000,
+      "startTime": "2026-10-24T17:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 5",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792861200000,
+      "startTime": "2026-10-24T17:00:00",
+      "reservedIntersection": true
+    },
+    {
+      "courtName": "Court 1",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792866600000,
+      "startTime": "2026-10-24T18:30:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 1",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792868400000,
+      "startTime": "2026-10-24T19:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 8",
+      "duration": 90,
+      "price": 90,
+      "startTimestamp": 1792868400000,
+      "startTime": "2026-10-24T19:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 2",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792868400000,
+      "startTime": "2026-10-24T19:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 2",
+      "duration": 60,
+      "price": 80,
+      "startTimestamp": 1792873800000,
+      "startTime": "2026-10-24T20:30:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 1",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1792882800000,
+      "startTime": "2026-10-24T23:00:00",
+      "reservedIntersection": false
+    }
+  ]
+}

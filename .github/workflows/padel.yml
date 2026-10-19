@@ -38,10 +38,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # club.json (tenant id + courts) is written once by `python probe.py --write`
+      # club.json (club id + courts) is written once by `python probe.py --club-id <id> --write`
       # and committed; without it the bot exits on start and systemd loops.
       - name: Check club.json is committed
-        run: test -f padel/club.json || { echo '::error::padel/club.json missing: run `python probe.py --write` and commit it'; exit 1; }
+        run: test -f padel/club.json || { echo '::error::padel/club.json missing: run `python probe.py --club-id <id> --write` and commit it'; exit 1; }
 
       - name: Rsync padel bot to server
         uses: burnett01/rsync-deployments@6.0.0

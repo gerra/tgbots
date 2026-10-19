@@ -1,4 +1,4 @@
-"""Telegram bot: /padel finds free courts at Padium Canary Wharf (read-only).
+"""Telegram bot: /padel finds free courts at Padium Canary Wharf (read-only, via Padel Mates).
 
 Run: python bot.py   (long polling; needs TELEGRAM_BOT_TOKEN in env or .env)
 """
@@ -14,8 +14,8 @@ from telegram.constants import ChatAction, ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 import finder
+from padelmates import BookingSiteError, PadelMatesClient, ShapeError, load_club
 from parser import LONDON, NextQuery, ParseError, parse
-from playtomic import PlaytomicClient, PlaytomicError, ShapeError, load_club
 
 log = logging.getLogger("padel")
 
@@ -29,8 +29,8 @@ USAGE = (
     "<code>/padel next</code> – earliest free slot\n"
     "Days: today, tomorrow, mon–sun, dd/mm. Times: 18:00, 18, 6pm, 6:30pm. London time."
 )
-DOWN = "😕 Can't reach Playtomic right now. Try again in a minute."
-CHANGED = "😕 Playtomic sent something I don't understand (their API may have changed). Logged it."
+DOWN = "😕 Can't reach Padel Mates right now. Try again in a minute."
+CHANGED = "😕 Padel Mates sent something I don't understand (their API may have changed). Logged it."
 
 
 def now_london() -> datetime:
@@ -48,7 +48,7 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await reply(msg, USAGE)
         return
 
-    client: PlaytomicClient = context.bot_data["client"]
+    client: PadelMatesClient = context.bot_data["client"]
     await msg.chat.send_action(ChatAction.TYPING)
     try:
         if isinstance(query, NextQuery):
@@ -56,15 +56,15 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             text = await answer_slot(client, query.when, now)
     except ShapeError:
-        log.exception("unexpected Playtomic response for %s", context.args)
+        log.exception("unexpected Padel Mates response for %s", context.args)
         text = CHANGED
-    except PlaytomicError:
-        log.exception("Playtomic request failed for %s", context.args)
+    except BookingSiteError:
+        log.exception("Padel Mates request failed for %s", context.args)
         text = DOWN
     await reply(msg, text)
 
 
-async def answer_slot(client: PlaytomicClient, when: datetime, now: datetime) -> str:
+async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime) -> str:
     day = when.date()
     m = finder.match(await client.day(day), when, now)
     next_day = None
@@ -74,7 +74,7 @@ async def answer_slot(client: PlaytomicClient, when: datetime, now: datetime) ->
     return finder.render_match(client.club, m, next_day, now)
 
 
-async def answer_next(client: PlaytomicClient, now: datetime) -> str:
+async def answer_next(client: PadelMatesClient, now: datetime) -> str:
     for i in range(NEXT_DAYS + 1):
         d = now.date() + timedelta(days=i)
         found = finder.earliest(await client.day(d), now)
@@ -95,11 +95,11 @@ async def reply(msg, text: str) -> None:
 
 
 async def post_init(app: Application) -> None:
-    app.bot_data["client"] = PlaytomicClient(load_club())
+    app.bot_data["client"] = PadelMatesClient(load_club())
     await app.bot.set_my_commands(
         [BotCommand("padel", "Free courts at Padium: /padel sat 18:00 · /padel next")]
     )
-    log.info("ready: %s (%s)", app.bot_data["client"].club.name, app.bot_data["client"].club.tenant_id)
+    log.info("ready: %s (%s)", app.bot_data["client"].club.name, app.bot_data["client"].club.club_id)
 
 
 async def post_shutdown(app: Application) -> None:

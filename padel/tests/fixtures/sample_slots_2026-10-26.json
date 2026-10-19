@@ -1,0 +1,52 @@
+{
+  "allSlots": [
+    {
+      "courtName": "Court 4",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1792998000000,
+      "startTime": "2026-10-26T07:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 4",
+      "duration": 90,
+      "price": 60,
+      "startTimestamp": 1792998000000,
+      "startTime": "2026-10-26T07:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 7",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1792998000000,
+      "startTime": "2026-10-26T07:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 7",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1793001600000,
+      "startTime": "2026-10-26T08:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Centre Court",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1793001600000,
+      "startTime": "2026-10-26T08:00:00",
+      "reservedIntersection": false
+    },
+    {
+      "courtName": "Court 4",
+      "duration": 60,
+      "price": 40,
+      "startTimestamp": 1793007000000,
+      "startTime": "2026-10-26T09:30:00",
+      "reservedIntersection": false
+    }
+  ]
+}

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from html import escape
 
-from playtomic import Club, Court, Slot
+from padelmates import Club, Court, Slot
 
 DURATIONS = (60, 90)
 NEAREST_EACH_SIDE = 3
@@ -85,7 +85,7 @@ def header(club: Club, d: date | None = None) -> str:
 
 
 def footer(club: Club) -> str:
-    return f'<a href="{escape(club.url, quote=True)}">Book in Playtomic</a>'
+    return f'<a href="{escape(club.url, quote=True)}">Book in Padel Mates</a>'
 
 
 def render_match(club: Club, m: Match, next_day: tuple[date, list[Slot]] | None = None, now: datetime | None = None) -> str:

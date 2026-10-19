@@ -1,5 +1,5 @@
 [Unit]
-Description=Padel bot — /padel finds free courts at Padium Canary Wharf (Playtomic, read-only)
+Description=Padel bot — /padel finds free courts at Padium Canary Wharf (Padel Mates, read-only)
 After=network-online.target
 Wants=network-online.target
 
