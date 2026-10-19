@@ -1,0 +1,7 @@
+# Pinned so CI (latest ruff) and local runs agree. 3.10 keeps the bot
+# runnable on an older server Python (datetime.UTC needs 3.11).
+target-version = "py310"
+line-length = 140
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]

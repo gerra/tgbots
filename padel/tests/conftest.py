@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
 sys.path.insert(0, str(ROOT))
 
-from padelmates import load_club
+from padelmates import load_club  # noqa: E402  (needs the sys.path line above)
 
 
 def load_fixture(name: str):
