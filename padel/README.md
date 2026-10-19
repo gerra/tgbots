@@ -24,7 +24,10 @@ long polling.
 
 ```
 🎾 Padium Canary Wharf, Sat 24 Oct
-✅ 18:30 free: Centre Court (indoor) 60/90 min £100/£150 · Court 3 (indoor) 60 min £80 · Outdoor Court 7 (outdoor) 60/90 min £80/£120
+✅ 18:30 free:
+• Centre Court (indoor) 60/90 min £100/£150
+• Court 3 (indoor) 60 min £80
+• Outdoor Court 7 (outdoor) 60/90 min £80/£120
 Book in Padel Mates
 ```
 

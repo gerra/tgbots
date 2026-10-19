@@ -69,7 +69,9 @@ def test_exact_match(club):
     text = finder.render_match(club, m)
     assert text.splitlines() == [
         "🎾 <b>Padium Canary Wharf</b>, Sat 24 Oct",
-        "✅ <b>18:00 free:</b> Court 3 (indoor) 60/90 min £80/£120 · Court 8 (outdoor) 60 min £60",
+        "✅ <b>18:00 free:</b>",
+        "• Court 3 (indoor) 60/90 min £80/£120",
+        "• Court 8 (outdoor) 60 min £60",
         '<a href="https://padelmates.se/club/0f1e2d3c4b5a69788796a5b4c3d2e1f0">Book in Padel Mates</a>',
     ]
 
@@ -80,7 +82,7 @@ def test_nearest_sorted_by_distance(club):
     assert [(t.strftime("%H:%M"), n) for t, n in m.nearest] == [
         ("18:00", 2), ("19:30", 1), ("17:00", 2), ("20:00", 3), ("21:30", 1), ("07:00", 1),
     ]
-    assert "❌ <b>18:30 taken.</b> Nearest: 18:00 (2 courts) · 19:30 (1 court) · 17:00 (2 courts)" in finder.render_match(club, m)
+    assert "❌ <b>18:30 taken.</b> Nearest:\n• 18:00 (2 courts)\n• 19:30 (1 court)\n• 17:00 (2 courts)\n" in finder.render_match(club, m)
 
 
 def test_nearest_caps_three_each_side(club):
@@ -100,7 +102,7 @@ def test_fully_booked_shows_next_day(club):
     assert m.fully_booked
     text = finder.render_match(club, m, (date(2026, 10, 26), day_slots(club, "2026-10-26")), MON_NOON)
     assert "❌ <b>Sun 25 Oct is fully booked.</b>" in text
-    assert "First free on Mon 26 Oct: 07:00 (2 courts) · 08:00 (2 courts) · 09:30 (1 court)" in text
+    assert "First free on Mon 26 Oct:\n• 07:00 (2 courts)\n• 08:00 (2 courts)\n• 09:30 (1 court)\n" in text
 
 
 def test_fully_booked_next_day_too(club):
@@ -120,8 +122,8 @@ def test_earliest_and_render_next(club):
     found = finder.earliest(day_slots(club, "2026-10-24"), MON_NOON)
     text = finder.render_next(club, found, 7)
     assert "🎾 <b>Padium Canary Wharf</b>, Sat 24 Oct" in text
-    assert "✅ <b>07:00 free:</b> Court 3 (indoor) 60 min £60" in text
-    assert "Then: 17:00 (2 courts) · 18:00 (2 courts) · 19:30 (1 court)" in text
+    assert "✅ <b>07:00 free:</b>\n• Court 3 (indoor) 60 min £60\n" in text
+    assert "Then:\n• 17:00 (2 courts)\n• 18:00 (2 courts)\n• 19:30 (1 court)\n" in text
     assert "Nothing free in the next 7 days" in finder.render_next(club, None, 7)
 
 

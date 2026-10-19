@@ -32,14 +32,14 @@ def fixture_client(club, calls=None, horizon_ms=None):
 
 async def test_answer_slot_exact(club):
     text = await bot.answer_slot(fixture_client(club), datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON)
-    assert "✅ <b>18:00 free:</b> Court 3 (indoor)" in text
+    assert "✅ <b>18:00 free:</b>\n• Court 3 (indoor)" in text
 
 
 async def test_answer_slot_fully_booked_fetches_next_day(club):
     calls = []
     text = await bot.answer_slot(fixture_client(club, calls), datetime(2026, 10, 25, 18, tzinfo=LONDON), MON_NOON)
     assert calls == ["2026-10-25", "2026-10-26"]
-    assert "First free on Mon 26 Oct: 07:00 (2 courts)" in text
+    assert "First free on Mon 26 Oct:\n• 07:00 (2 courts)" in text
 
 
 async def test_answer_next_walks_days_until_free(club):

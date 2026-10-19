@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from html import escape
@@ -92,16 +93,16 @@ def render_match(club: Club, m: Match, next_day: tuple[date, list[Slot]] | None 
     t = fmt_time(m.when)
     lines = [header(club, m.when.date())]
     if m.exact:
-        lines.append(f"✅ <b>{t} free:</b> " + " · ".join(fmt_offer(o) for o in m.exact))
+        lines += [f"✅ <b>{t} free:</b>", *bullets(fmt_offer(o) for o in m.exact)]
     elif not m.fully_booked:
-        lines.append(f"❌ <b>{t} taken.</b> Nearest: " + fmt_starts(m.nearest))
+        lines += [f"❌ <b>{t} taken.</b> Nearest:", *fmt_starts(m.nearest)]
     else:
         lines.append(f"❌ <b>{fmt_day(m.when.date())} is fully booked.</b>")
         if next_day is not None:
             d, slots = next_day
             starts = first_free(slots, now or m.when)
             if starts:
-                lines.append(f"First free on {fmt_day(d)}: " + fmt_starts(starts))
+                lines += [f"First free on {fmt_day(d)}:", *fmt_starts(starts)]
             else:
                 lines.append(f"{fmt_day(d)} is fully booked too.")
     lines.append(footer(club))
@@ -112,12 +113,9 @@ def render_next(club: Club, found: tuple[datetime, list[Offer], list[tuple[datet
     if found is None:
         return "\n".join([header(club), f"😕 Nothing free in the next {days} days.", footer(club)])
     start, offers, later = found
-    lines = [
-        header(club, start.date()),
-        f"✅ <b>{fmt_time(start)} free:</b> " + " · ".join(fmt_offer(o) for o in offers),
-    ]
+    lines = [header(club, start.date()), f"✅ <b>{fmt_time(start)} free:</b>", *bullets(fmt_offer(o) for o in offers)]
     if later:
-        lines.append("Then: " + fmt_starts(later))
+        lines += ["Then:", *fmt_starts(later)]
     lines.append(footer(club))
     return "\n".join(lines)
 
@@ -149,8 +147,13 @@ def fmt_offer(o: Offer) -> str:
     return f"{text} {price}" if price else text
 
 
-def fmt_starts(starts: list[tuple[datetime, int]]) -> str:
-    return " · ".join(f"{fmt_time(t)} ({n} court{'s' if n != 1 else ''})" for t, n in starts)
+def fmt_starts(starts: list[tuple[datetime, int]]) -> list[str]:
+    return bullets(f"{fmt_time(t)} ({n} court{'s' if n != 1 else ''})" for t, n in starts)
+
+
+def bullets(items: Iterable[str]) -> list[str]:
+    """One line per item: compact replies were too wide for a phone in a busy group."""
+    return [f"• {item}" for item in items]
 
 
 def fmt_price(raw: str | None) -> str | None:
