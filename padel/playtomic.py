@@ -32,11 +32,15 @@ CLUB_FILE = Path(__file__).with_name("club.json")
 # logged-in bearer token, so neither fits a read-only bot. Overridable in case
 # Playtomic moves it again (PLAYTOMIC_AVAILABILITY_URL); probe.py tries all three.
 AVAILABILITY_URL = "https://playtomic.com/api/clubs/availability"
-# Slots come back as a zone-less start_date + start_time in UTC.
+# `date` is the club's local day; slots come back as a zone-less start_date +
+# start_time in UTC (checked against London clubs' opening hours during BST).
 SLOT_TZ = ZoneInfo("UTC")
 TIMEOUT = 10.0
 CACHE_TTL = 60.0
 USER_AGENT = "padium-padel-bot/1.0 (read-only availability lookup)"
+
+
+COURT_KINDS = ("indoor", "outdoor", "roofed", "covered")
 
 
 class PlaytomicError(RuntimeError):
@@ -87,7 +91,7 @@ def _slugify(name: str) -> str:
 
 
 def club_from_tenant(raw: dict[str, Any]) -> Club:
-    """Build a Club from a /v1/tenants item (or the tenant object a club page embeds)."""
+    """Build a Club from the tenant a playtomic.com club page embeds (or a /v1/tenants item)."""
     try:
         tenant_id = raw["tenant_id"]
         name = raw["tenant_name"]
@@ -95,13 +99,15 @@ def club_from_tenant(raw: dict[str, Any]) -> Club:
         raise ShapeError(f"tenant missing {e}") from e
     courts: dict[str, Court] = {}
     for r in raw.get("resources") or []:
-        if r.get("sport_id", "PADEL") != "PADEL" or r.get("is_active") is False:
+        if (r.get("sport_id") or r.get("sport") or "PADEL") != "PADEL" or r.get("is_active") is False:
             continue
-        rid = r.get("resource_id") or r.get("id")
+        # Club pages send {resourceId, features: ["indoor", "double", ...]};
+        # the v1 API sent {resource_id, properties: {resource_type: "indoor"}}.
+        rid = r.get("resource_id") or r.get("resourceId") or r.get("id")
         if not rid:
             continue
-        props = r.get("properties") or {}
-        kind = props.get("resource_type")
+        kind = (r.get("properties") or {}).get("resource_type")
+        kind = kind or next((f for f in r.get("features") or [] if f in COURT_KINDS), None)
         courts[rid] = Court(rid, r.get("name") or "Court ?", kind.lower() if kind else None)
     tz = (raw.get("address") or {}).get("timezone") or "Europe/London"
     return Club(tenant_id, name, raw.get("slug") or _slugify(name), courts, tz)
@@ -179,8 +185,7 @@ class PlaytomicClient:
             if hit and _time.monotonic() - hit[0] < CACHE_TTL:
                 return hit[1]
             raw = await self._fetch(d)
-            # Slots are UTC, so a London day can spill into the neighbouring
-            # UTC date; keep only what actually starts on `d` in London.
+            # Belt and braces: keep only what actually starts on `d` in London.
             slots = sorted(
                 (s for s in parse_availability(raw, self.club) if s.start.date() == d),
                 key=lambda s: (s.start, s.court.name, s.duration),

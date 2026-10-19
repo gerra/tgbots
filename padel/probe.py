@@ -1,11 +1,15 @@
 """Hit Playtomic live, print the real response shapes, find Padium Canary Wharf.
 
-    python probe.py                      # look around, print what came back
-    python probe.py --write              # ...and write club.json + tests/fixtures/live_*.json
-    python probe.py --tenant-id <uuid>   # skip the search
+    python probe.py                       # search, print what came back
+    python probe.py --write               # ...and write club.json + tests/fixtures/live_*.json
+    python probe.py --slug <club-slug>    # skip the search (playtomic.com/clubs/<slug>)
+    python probe.py --slug x --fixtures   # save live fixtures from any club, no club.json
 
-Playtomic's API is unofficial and moves around, so this tries every host we
-know of and reports which ones answer without a login.
+Playtomic's API is unofficial and moves around. As of Oct 2026:
+- api.playtomic.io is gone (502), api.app.playtomic.io wants a login (401);
+- playtomic.com/search?q= lists clubs, and each playtomic.com/clubs/<slug>
+  page embeds its tenant (id, courts, opening hours) in the RSC payload;
+- playtomic.com/api/clubs/availability answers without a login.
 """
 from __future__ import annotations
 
@@ -31,11 +35,9 @@ from playtomic import (
 
 HERE = Path(__file__).parent
 FIXTURES = HERE / "tests" / "fixtures"
-NAME = "Padium"
-COORD = "51.5045,-0.0195"  # 10 Bank Street, E14 4DE
-GUESSED_SLUGS = ["padium-canary-wharf", "padium", "padium-london"]
-
-TENANT_HOSTS = ["https://api.playtomic.io", "https://api.app.playtomic.io"]
+SEARCHES = ["padium", "padium london", "padium canary wharf", "canary wharf"]
+GUESSED_SLUGS = ["padium-canary-wharf", "padium-london", "padium"]
+WEB = "https://playtomic.com"
 
 http = httpx.Client(timeout=15, headers={"User-Agent": USER_AGENT, "Accept": "application/json"}, follow_redirects=True)
 
@@ -75,18 +77,32 @@ def shape(v: Any, depth: int = 0) -> str:
     return type(v).__name__
 
 
-def find_tenants(obj: Any) -> list[dict]:
-    """Every dict carrying tenant_id + tenant_name anywhere in a JSON tree."""
-    out = []
-    if isinstance(obj, dict):
-        if "tenant_id" in obj and "tenant_name" in obj:
-            out.append(obj)
-        for v in obj.values():
-            out += find_tenants(v)
-    elif isinstance(obj, list):
-        for v in obj:
-            out += find_tenants(v)
-    return out
+def html(url: str, **params: str) -> str | None:
+    r = get(url, params=params, headers={"Accept": "text/html"})
+    if isinstance(r, str) or r.status_code != 200:
+        print(f"    {url} {params or ''} -> {r if isinstance(r, str) else r.status_code}")
+        return None
+    return r.text
+
+
+def club_page_tenant(slug: str) -> dict | None:
+    """The tenant object playtomic.com/clubs/<slug> embeds in its RSC payload."""
+    page = html(f"{WEB}/clubs/{slug}")
+    if page is None:
+        return None
+    chunks = re.findall(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)', page, re.DOTALL)
+    payload = "".join(json.loads(f'"{c}"') for c in chunks)
+    i = payload.find('{"tenant":{')
+    if i < 0:
+        print(f"    {slug}: no tenant in page payload")
+        return None
+    tenant, _ = json.JSONDecoder().raw_decode(payload, i)
+    return tenant["tenant"]
+
+
+def describe(t: dict) -> str:
+    a = t.get("address") or {}
+    return f"{t['tenant_id']}  {t['tenant_name']}  ({a.get('street')}, {a.get('postal_code')} {a.get('city')}, {a.get('country_code')})"
 
 
 def is_padium_cw(t: dict) -> bool:
@@ -96,42 +112,20 @@ def is_padium_cw(t: dict) -> bool:
     )
 
 
-def search_tenant(tenant_id: str | None) -> tuple[dict | None, Any]:
-    for host in TENANT_HOSTS:
-        queries = (
-            [{"tenant_id": tenant_id}] if tenant_id else
-            [{"tenant_name": NAME, "sport_id": "PADEL", "size": 50},
-             {"coordinate": COORD, "radius": 3000, "sport_id": "PADEL", "playtomic_status": "ACTIVE", "size": 100}]
-        )
-        for q in queries:
-            data = show(f"tenants via {host}", get(f"{host}/v1/tenants", params=q))
-            if not data:
-                continue
-            tenants = find_tenants(data)
-            for t in tenants:
-                print(f"    - {t['tenant_id']}  {t['tenant_name']}  {(t.get('address') or {}).get('street')}")
-            hit = next((t for t in tenants if (t["tenant_id"] == tenant_id if tenant_id else is_padium_cw(t))), None)
-            if hit:
-                return hit, data
-    # Fallback: the tenant object the playtomic.com club page embeds in __NEXT_DATA__.
-    for slug in GUESSED_SLUGS:
-        r = get(f"https://playtomic.com/clubs/{slug}", headers={"Accept": "text/html"})
-        if isinstance(r, str):
-            print(f"\n### club page {r}")
-            continue
-        print(f"\n### club page {r.url} -> HTTP {r.status_code}")
-        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.DOTALL)
-        if r.status_code != 200 or not m:
-            continue
-        data = json.loads(m.group(1))
-        tenants = [t for t in find_tenants(data) if not tenant_id or t["tenant_id"] == tenant_id]
-        for t in tenants:
-            print(f"    - {t['tenant_id']}  {t['tenant_name']}  resources: {len(t.get('resources') or [])}")
-        if tenants:
-            t = dict(tenants[0])
-            t.setdefault("slug", slug)
-            return t, data
-    return None, None
+def search_tenant() -> dict | None:
+    slugs: list[str] = []
+    for q in SEARCHES:
+        page = html(f"{WEB}/search", q=q) or ""
+        found = sorted(set(re.findall(r'href="/clubs/([a-z0-9-]+)"', page)))
+        print(f"\n### search {q!r}: {len(found)} clubs")
+        slugs += [s for s in found if "padium" in s or "canary" in s or "wharf" in s]
+    for slug in dict.fromkeys(slugs + GUESSED_SLUGS):
+        t = club_page_tenant(slug)
+        if t:
+            print(f"    {slug}: {describe(t)}")
+            if is_padium_cw(t):
+                return t
+    return None
 
 
 def availability_candidates(tenant_id: str, d: date) -> list[tuple[str, str, dict]]:
@@ -155,8 +149,7 @@ def summarise(raw: list, club) -> None:
         print("    no free slots")
         return
     raw_times = sorted(s["start_time"] for item in raw for s in item.get("slots") or [])
-    print(f"    raw start_time range: {raw_times[0]} .. {raw_times[-1]}  (compare with the first bookable time in the app: "
-          "an hour earlier during BST means the times are UTC)")
+    print(f"    raw start_time range: {raw_times[0]} .. {raw_times[-1]}  (UTC: an hour before opening time during BST)")
     print(f"    as London: {min(s.start for s in slots):%a %d %H:%M} .. {max(s.start for s in slots):%a %d %H:%M}")
     print(f"    durations: {dict(Counter(s.duration for s in slots))}; prices: {dict(Counter(s.price for s in slots).most_common(4))}")
     unknown = {s.court.id for s in slots if s.court.name == 'Court ?'}
@@ -166,19 +159,21 @@ def summarise(raw: list, club) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tenant-id")
+    ap.add_argument("--slug", help="playtomic.com/clubs/<slug>; skips the search")
     ap.add_argument("--write", action="store_true", help="write club.json and tests/fixtures/live_*.json")
+    ap.add_argument("--fixtures", action="store_true", help="write only tests/fixtures/live_*.json")
     args = ap.parse_args()
 
-    tenant, _ = search_tenant(args.tenant_id)
+    tenant = club_page_tenant(args.slug) if args.slug else search_tenant()
     if not tenant:
-        print("\n!! Padium Canary Wharf not found. Find the id in the Playtomic web app URL and pass --tenant-id.")
+        print("\n!! Padium Canary Wharf not found on Playtomic. If it's there under another name, "
+              "pass --slug from its playtomic.com/clubs/<slug> URL.")
         return 1
     club = club_from_tenant(tenant)
-    print(f"\n=== FOUND: {club.name}  tenant_id={club.tenant_id}  url={club.url}")
+    print(f"\n=== CLUB: {describe(tenant)}\n    url={club.url}  timezone={club.timezone}")
+    print(f"    opening hours: {json.dumps(tenant.get('opening_hours'))}")
     for c in club.courts.values():
         print(f"    court {c.id}  {c.name}  {c.kind}")
-    print(f"    raw resource example: {json.dumps((tenant.get('resources') or [{}])[0])[:400]}")
 
     today = datetime.now(LONDON).date()
     saturday = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
@@ -193,14 +188,17 @@ def main() -> int:
                 samples.setdefault(d.isoformat(), data)
     print(f"\n=== availability works via: {sorted(set(working)) or 'NOTHING'}")
 
-    if args.write:
-        CLUB_FILE.write_text(json.dumps(club_to_json(club), indent=2) + "\n")
+    if args.write or args.fixtures:
         FIXTURES.mkdir(parents=True, exist_ok=True)
-        (FIXTURES / "live_tenant.json").write_text(json.dumps(tenant, indent=2) + "\n")
+        (FIXTURES / "live_tenant.json").write_text(json.dumps(tenant, indent=2, ensure_ascii=False) + "\n")
+        for old in FIXTURES.glob("live_availability_*.json"):
+            old.unlink()
         for day, data in samples.items():
             (FIXTURES / f"live_availability_{day}.json").write_text(json.dumps(data, indent=2) + "\n")
-        print(f"wrote {CLUB_FILE.name} and {len(samples) + 1} fixtures in {FIXTURES}")
-        print(f"PADIUM_TENANT_ID={club.tenant_id}")
+        print(f"wrote {len(samples) + 1} fixtures in {FIXTURES}")
+    if args.write:
+        CLUB_FILE.write_text(json.dumps(club_to_json(club), indent=2, ensure_ascii=False) + "\n")
+        print(f"wrote {CLUB_FILE.name}\nPADIUM_TENANT_ID={club.tenant_id}")
     return 0 if working else 2
 
 

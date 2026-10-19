@@ -39,14 +39,11 @@ Book in Playtomic
 | `club.json` | tenant id, slug, courts (name, indoor/outdoor), written once by `probe.py --write` |
 
 Availability comes from `GET https://playtomic.com/api/clubs/availability?tenant_id=…&date=YYYY-MM-DD&sport_id=PADEL`.
-That is the no-auth endpoint the playtomic.com club pages use. Notes on the other endpoints:
+That is the no-auth endpoint the playtomic.com club pages use. `date` is the club's local day. Slots come back as a UTC `start_date` + `start_time`, which the bot converts to London time with zoneinfo, so it handles BST and GMT. (Checked live in Oct 2026: London clubs that open at 07:00 or 08:00 return their first BST slot at `06:00` or `07:00`.)
 
-- `api.playtomic.io/v1/availability` sits behind a CloudFront rule that returns 403 for everything.
-- `api.app.playtomic.io` has wanted a logged-in bearer token since 2026.
+The endpoints in the original brief are dead for a no-login bot. `api.playtomic.io` is gone (502), and `api.app.playtomic.io` answers 401 without a token. Club metadata (tenant id, courts, indoor/outdoor, opening hours) is read once from the club page at `playtomic.com/clubs/<slug>` and stored in `club.json`.
 
-`probe.py` tries all three, so re-run it if the bot starts replying "Playtomic sent something I don't understand".
-
-Slots come back as a UTC `start_date` + `start_time`. The bot converts them to London time with zoneinfo, so it handles BST and GMT.
+`probe.py` re-checks all of this. Re-run it if the bot starts replying "Playtomic sent something I don't understand".
 
 ## Set up (once)
 
@@ -60,9 +57,11 @@ Slots come back as a UTC `start_date` + `start_time`. The bot converts them to L
 5. **Find the club** (needs network access to playtomic.com):
    ```sh
    cd padel && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-   .venv/bin/python probe.py --write     # prints shapes + tenant id, writes club.json + tests/fixtures/live_*.json
-   git add club.json tests/fixtures && git commit -m "padel: Padium club.json"
+   .venv/bin/python probe.py --write                 # searches playtomic.com for Padium Canary Wharf
+   .venv/bin/python probe.py --slug <slug> --write   # or point it at playtomic.com/clubs/<slug>
+   git add club.json tests/fixtures && git commit -m "padel: club.json"
    ```
+   The probe prints the response shapes and writes `club.json` plus real fixtures.
 6. **Configure the server.** Run `cp .env.example .env`, fill in `TELEGRAM_BOT_TOKEN` (and optionally `PADIUM_TENANT_ID`), then run `./push-env.sh`.
 7. **Add GitHub secrets.** In this repo, go to Settings → Environments → `default` and add the same `DEPLOY_HOST`, `DEPLOY_USER` (root) and `DEPLOY_KEY` that fashier and www use.
 
@@ -106,4 +105,4 @@ cd padel && .venv/bin/pytest -q && .venv/bin/ruff check .
 TELEGRAM_BOT_TOKEN=… .venv/bin/python bot.py      # run locally (stop the server copy first: one poller per token)
 ```
 
-`tests/fixtures/sample_*.json` are hand-made in Playtomic's response shape. They cover a BST Saturday, the Sunday the clocks go back, and a GMT Monday. `live_*.json` are real responses saved by `probe.py --write`, and a test checks that they still parse.
+`tests/fixtures/sample_*.json` are hand-made in Playtomic's response shape. They cover a BST Saturday, the Sunday the clocks go back, and a GMT Monday. `live_*.json` are real responses saved by `probe.py` (currently from Padel Box Bermondsey), and a test checks that they still parse.

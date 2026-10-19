@@ -1,0 +1,112 @@
+[
+  {
+    "resource_id": "51af4129-979e-4322-8dad-cd8e14523846",
+    "start_date": "2026-10-24",
+    "slots": [
+      {
+        "start_time": "06:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "20:30:00",
+        "duration": 90,
+        "price": "90 GBP"
+      }
+    ]
+  },
+  {
+    "resource_id": "be63f0fa-2a2f-4645-8fad-7f3c964e2ab1",
+    "start_date": "2026-10-24",
+    "slots": [
+      {
+        "start_time": "06:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "20:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "21:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      }
+    ]
+  },
+  {
+    "resource_id": "b124704e-e08f-4cb3-8aa2-d13fedaf87c6",
+    "start_date": "2026-10-24",
+    "slots": [
+      {
+        "start_time": "06:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "19:30:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "19:30:00",
+        "duration": 90,
+        "price": "90 GBP"
+      },
+      {
+        "start_time": "20:30:00",
+        "duration": 90,
+        "price": "90 GBP"
+      },
+      {
+        "start_time": "21:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      }
+    ]
+  },
+  {
+    "resource_id": "a66bcfcb-af36-4a88-9f89-bc1ba84f0c08",
+    "start_date": "2026-10-24",
+    "slots": [
+      {
+        "start_time": "06:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "20:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "21:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      }
+    ]
+  },
+  {
+    "resource_id": "10f735de-765a-4a45-a28a-b86e4044cb4f",
+    "start_date": "2026-10-24",
+    "slots": [
+      {
+        "start_time": "06:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "18:30:00",
+        "duration": 60,
+        "price": "60 GBP"
+      },
+      {
+        "start_time": "21:00:00",
+        "duration": 60,
+        "price": "60 GBP"
+      }
+    ]
+  }
+]
