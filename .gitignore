@@ -11,3 +11,5 @@
 **/.pytest_cache/
 .ruff_cache/
 **/.ruff_cache/
+# Game cards (who's in / who paid), written by the bot; lives only on the server.
+padel/state/

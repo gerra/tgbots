@@ -85,10 +85,6 @@ def header(club: Club, d: date | None = None) -> str:
     return f"{title}, {fmt_day(d)}" if d else title
 
 
-def footer(club: Club) -> str:
-    return f'<a href="{escape(club.url, quote=True)}">Book in Padel Mates</a>'
-
-
 def render_match(club: Club, m: Match, next_day: tuple[date, list[Slot]] | None = None, now: datetime | None = None) -> str:
     t = fmt_time(m.when)
     lines = [header(club, m.when.date())]
@@ -105,18 +101,16 @@ def render_match(club: Club, m: Match, next_day: tuple[date, list[Slot]] | None 
                 lines += [f"First free on {fmt_day(d)}:", *fmt_starts(starts)]
             else:
                 lines.append(f"{fmt_day(d)} is fully booked too.")
-    lines.append(footer(club))
     return "\n".join(lines)
 
 
 def render_next(club: Club, found: tuple[datetime, list[Offer], list[tuple[datetime, int]]] | None, days: int) -> str:
     if found is None:
-        return "\n".join([header(club), f"😕 Nothing free in the next {days} days.", footer(club)])
+        return "\n".join([header(club), f"😕 Nothing free in the next {days} days."])
     start, offers, later = found
     lines = [header(club, start.date()), f"✅ <b>{fmt_time(start)} free:</b>", *bullets(fmt_offer(o) for o in offers)]
     if later:
         lines += ["Then:", *fmt_starts(later)]
-    lines.append(footer(club))
     return "\n".join(lines)
 
 
@@ -131,7 +125,7 @@ def render_not_open(club: Club, when: datetime, horizon: datetime, now: datetime
         f"🕒 <b>{fmt_time(when)} isn't bookable yet.</b> Courts open {days} days ahead, "
         f"so try from around {fmt_day(opens.date())} {fmt_time(opens)}."
     )
-    return "\n".join([header(club, when.date()), line, footer(club)])
+    return "\n".join([header(club, when.date()), line])
 
 
 def fmt_offer(o: Offer) -> str:

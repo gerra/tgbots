@@ -2,9 +2,11 @@
 
 Telegram bot (@padelbloksbot) that finds free padel courts at **Padium Canary
 Wharf** (10 Bank Street, E14 4DE). It only ever searches that one club. It is
-read-only: no login, no booking, no payment. It reads the free slots that
-Padel Mates (Padium's booking system since it left Playtomic) shows on the
-club's public page, and links there so you can book in the app.
+read-only towards the club: no login, no booking, no payment. It reads the
+free slots that Padel Mates (Padium's booking system since it left Playtomic)
+shows on the club's public page, and links there so you can book in the app.
+Once someone has booked, a game card in the chat tracks who's playing and who
+has paid the booker back.
 
 Runs on hetzner_gb at `/opt/padel-bot` as the `padel-bot` systemd unit, using
 long polling.
@@ -16,6 +18,8 @@ long polling.
 | `/padel sat 18:00` | courts free at that time, or the nearest free times that day |
 | `/padel tomorrow 7pm` · `/padel 24/10 19:30` · `/padel today 20:00` | same |
 | `/padel next` | earliest free slot from now, up to 7 days ahead |
+| `/booked sat 18:00 court 3 90 £120` | post a game card for a court you booked (court, minutes and price optional, any order) |
+| `/games` | games tracked in this chat: how many are in, how many still owe |
 | `/padel` | usage |
 
 - **Days:** `today`, `tomorrow`, `mon`..`sun` (the next occurrence, or today if it's that day and the time hasn't passed yet), and `dd/mm`.
@@ -28,14 +32,45 @@ long polling.
 • Centre Court (indoor) 60/90 min £100/£150
 • Court 3 (indoor) 60 min £80
 • Outdoor Court 7 (outdoor) 60/90 min £80/£120
-Book in Padel Mates
+Booked one? Tap its 📌 so the group can join and pay you.
+[📲 Book in Padel Mates]
+[📌 Centre Court · 60m] [📌 Centre Court · 90m]
+[📌 Court 3 · 60m]
+[📌 Outdoor Court 7 · 60m] [📌 Outdoor Court 7 · 90m]
 ```
+
+### Booking link
+
+📲 opens Padium's page on Padel Mates (`padelmates.se/club/padium`). Padel Mates has no link to a particular slot, or even a day. Its web routes are only `/club/:id` plus membership and credit tabs, and the club grid always opens on today, even when the date comes from their own search page (checked in a browser, Oct 2026). So you still pick the day and court in the app.
+
+### Who booked, who paid
+
+Padel Mates won't tell a bot who booked or paid without the booker's login, so the group tells the bot:
+
+1. After booking in the app, tap that court's 📌 under the `/padel` answer. For a booking made some other way, use `/booked sat 18:00 court 3 90 £120`.
+2. The bot posts a game card:
+   ```
+   🎾 Sat 24 Oct 18:00 · Court 3 (indoor) · 90 min
+   Padium Canary Wharf
+   💷 £120 total · £30 each, pay Anna
+   1. Anna 📌 booked
+   2. Bob ✅ paid
+   3. Cat ⏳ owes £30
+   4. ➕ free spot
+   [🙋 I'm in] [👋 Out] [💸 I paid]
+   [🔔 Remind unpaid] [🗑 Cancel]
+   ```
+3. Players tap 🙋 to take a spot and 💸 once they've paid the booker. The booker counts as paid. A share is the court price divided by 4.
+4. Only the booker can use 🔔 (a new message that pings everyone who still owes) and 🗑 (cancels the card only, not the Padel Mates booking).
+
+Cards are saved in `state/bot.pickle` (PTB `PicklePersistence`, game cards only), so they survive restarts and deploys. Games are forgotten 14 days after they're played. `/games` keeps listing past games while someone still owes.
 
 ## How it works
 
 | file | |
 |---|---|
-| `bot.py` | Telegram handlers (python-telegram-bot 21, async, long polling) |
+| `bot.py` | Telegram handlers (python-telegram-bot 21, async, long polling) and button callbacks |
+| `games.py` | game cards: who's in, who paid, `/booked` parsing |
 | `padelmates.py` | API client: one call per London day, 60 s cache, 10 s timeout |
 | `parser.py` | `sat 18:00` → London datetime |
 | `finder.py` | exact / nearest / fully-booked matching, plus the HTML reply |
@@ -69,8 +104,10 @@ Padium left Playtomic, and nothing for it is listed there (checked Oct 2026). `p
 2. **Register the command.** The bot calls `setMyCommands` on start, so `/padel` shows up in the menu automatically. To set it by hand, send `/setcommands` to BotFather, pick the bot, and send:
    ```
    padel - Free courts at Padium: /padel sat 18:00 · /padel next
+   booked - Track a game you booked: /booked sat 18:00 court 3 90 £120
+   games - Games in this chat: who's in, who has paid
    ```
-3. **Leave privacy mode ON.** That's the BotFather default (`/setprivacy` → Enabled). The bot only needs commands. In a group with several bots, type `/padel@padelbloksbot sat 18:00`.
+3. **Leave privacy mode ON.** That's the BotFather default (`/setprivacy` → Enabled). The bot only needs commands, and button taps reach it either way. In a group with several bots, type `/padel@padelbloksbot sat 18:00`.
 4. **Add it to a group.** Open the group, then Add members, search for `@padelbloksbot`, and add it. It doesn't need to be an admin.
 5. **Find the club** (needs network access to `padelmates.se` and `fastapi-production-fargate.padelmates.io`):
    ```sh
@@ -87,7 +124,7 @@ Padium left Playtomic, and nothing for it is listed there (checked Oct 2026). `p
 Deploys are automatic. Any push to `main` that touches `padel/` triggers `.github/workflows/padel.yml`, which does this:
 
 1. Runs ruff and pytest.
-2. Rsyncs `padel/` to `/opt/padel-bot`. `.env` and `venv` are never touched.
+2. Rsyncs `padel/` to `/opt/padel-bot`. `.env`, `venv` and `state/` (the game cards) are never touched.
 3. Runs `pip install` into the venv.
 4. Installs `padel-bot.service`, enables it and restarts it.
 5. Fails, and attaches the journal to the run, if the unit doesn't come up.
@@ -98,10 +135,10 @@ Deploys are automatic. Any push to `main` that touches `padel/` triggers `.githu
 
 ### Elsewhere (Docker / Fly.io / Railway / any VPS)
 
-The bot has no ports, no disk and no database. All it needs is `TELEGRAM_BOT_TOKEN`.
+The bot has no ports and no database. It needs `TELEGRAM_BOT_TOKEN`, plus a small volume for `state/` if you want game cards to survive redeploys.
 
 ```sh
-docker build -t padel-bot . && docker run -d --restart=unless-stopped --env-file .env padel-bot
+docker build -t padel-bot . && docker run -d --restart=unless-stopped --env-file .env -v padel-state:/app/state padel-bot
 ```
 
 - **Fly.io:** run `fly launch --no-deploy` (with no services or HTTP checks), then `fly secrets set TELEGRAM_BOT_TOKEN=…`, then `fly deploy`. Keep exactly one machine with `fly scale count 1`. Two pollers fight with `Conflict: terminated by other getUpdates`.
