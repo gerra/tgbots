@@ -40,6 +40,23 @@ jobs:
 
       # club.json (club id + courts) is written once by `python probe.py --club-id <id> --write`
       # and committed; without it the bot exits on start and systemd loops.
+      # These live in GitHub (Settings -> Environments -> default), not in .env:
+      # .env never leaves your machine except via push-env.sh to the server.
+      - name: Check deploy secrets are set
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing DEPLOY_HOST"
+          [ -n "$USER_" ] || missing="$missing DEPLOY_USER"
+          [ -n "$KEY" ] || missing="$missing DEPLOY_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secrets:$missing. Add them in Settings -> Environments -> default (same values as fashier)."
+            exit 1
+          fi
+
       - name: Check club.json is committed
         run: |
           if [ ! -f padel/club.json ]; then
