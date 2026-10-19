@@ -1,0 +1,26 @@
+[Unit]
+Description=Padel bot — /padel finds free courts at Padium Canary Wharf (Playtomic, read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/padel-bot
+EnvironmentFile=/opt/padel-bot/.env
+ExecStart=/opt/padel-bot/venv/bin/python /opt/padel-bot/bot.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# Tag entries so `journalctl -t padel-bot` works, not just -u.
+SyslogIdentifier=padel-bot
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONFAULTHANDLER=1
+# Bump to DEBUG with: sudo systemctl edit padel-bot.service
+Environment=LOG_LEVEL=INFO
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

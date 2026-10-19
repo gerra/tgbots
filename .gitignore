@@ -1,0 +1,13 @@
+.DS_Store
+.claude/
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+!**/.env.example
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/

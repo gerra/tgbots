@@ -1,0 +1,116 @@
+name: padel-bot
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['padel/**', '.github/workflows/padel.yml']
+  pull_request:
+    paths: ['padel/**', '.github/workflows/padel.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: padel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: padel/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    environment: default
+    runs-on: ubuntu-latest
+    # One deploy at a time: overlapping runs pip install into the same venv.
+    concurrency:
+      group: deploy-padel-bot
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # club.json (tenant id + courts) is written once by `python probe.py --write`
+      # and committed; without it the bot exits on start and systemd loops.
+      - name: Check club.json is committed
+        run: test -f padel/club.json || { echo '::error::padel/club.json missing: run `python probe.py --write` and commit it'; exit 1; }
+
+      - name: Rsync padel bot to server
+        uses: burnett01/rsync-deployments@6.0.0
+        with:
+          switches: >-
+            -avz --delete
+            --exclude '.git'
+            --exclude '.venv'
+            --exclude 'venv'
+            --exclude '__pycache__'
+            --exclude '*.pyc'
+            --exclude '.env'
+            --exclude 'tests'
+          path: ./padel/
+          remote_path: /opt/padel-bot
+          remote_host: ${{ secrets.DEPLOY_HOST }}
+          remote_user: ${{ secrets.DEPLOY_USER }}
+          remote_key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Install deps, sync systemd unit, restart
+        id: remote_deploy
+        run: |
+          echo "${{ secrets.DEPLOY_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no -o IdentitiesOnly=yes \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+              set -eo pipefail
+              trap 'rc=\$?; echo; echo \"=== DEPLOY FAILED (exit \$rc) — padel-bot journal (last 150 lines) ===\"; journalctl -u padel-bot -n 150 --no-pager || true; exit \$rc' ERR
+              cd /opt/padel-bot
+              if [ ! -f .env ]; then
+                echo '!!! /opt/padel-bot/.env missing: run padel/push-env.sh first'
+                false
+              fi
+              echo '--- ensure venv ---'
+              if [ ! -x venv/bin/python ]; then rm -rf venv && python3 -m venv venv; fi
+              echo '--- pip install ---'
+              venv/bin/pip install --upgrade pip
+              venv/bin/pip install -r requirements.txt
+              echo '--- sync systemd unit ---'
+              if ! cmp -s padel-bot.service /etc/systemd/system/padel-bot.service; then
+                install -m 644 padel-bot.service /etc/systemd/system/padel-bot.service
+                systemctl daemon-reload
+                echo '  updated padel-bot.service'
+              fi
+              # enable, not just restart — a restarted-but-disabled bot
+              # works until the box reboots, then silently never comes back.
+              systemctl enable padel-bot
+              systemctl restart padel-bot
+              sleep 5
+              if ! systemctl is-active --quiet padel-bot; then
+                echo '!!! padel-bot did not become active'
+                false
+              fi
+              echo '--- deploy OK ---'
+            "
+
+      - name: Collect logs on failure
+        if: failure() && steps.remote_deploy.conclusion == 'failure'
+        run: |
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no -o IdentitiesOnly=yes \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'journalctl -u padel-bot -n 500 --no-pager; echo "---"; systemctl status padel-bot --no-pager' \
+            > padel-bot-logs.log 2>&1 || true
+
+      - name: Upload failure logs as artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: padel-bot-deploy-logs
+          path: padel-bot-logs.log
+          if-no-files-found: ignore
+          retention-days: 14

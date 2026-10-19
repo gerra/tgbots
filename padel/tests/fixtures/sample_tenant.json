@@ -1,0 +1,117 @@
+{
+  "tenant_id": "5a1f0c3e-7d2b-4c11-9e8a-0d1a2b3c4d5e",
+  "tenant_name": "Padium Canary Wharf",
+  "slug": "padium-canary-wharf",
+  "address": {
+    "street": "10 Bank Street",
+    "postal_code": "E14 4DE",
+    "city": "London",
+    "country": "United Kingdom",
+    "country_code": "GB",
+    "coordinate": {
+      "lat": 51.5045,
+      "lon": -0.0195
+    },
+    "timezone": "Europe/London"
+  },
+  "playtomic_status": "ACTIVE",
+  "resources": [
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000001",
+      "name": "Court 1",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000002",
+      "name": "Court 2",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000003",
+      "name": "Court 3",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000004",
+      "name": "Court 4",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000005",
+      "name": "Court 5",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000006",
+      "name": "Court 6",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000007",
+      "name": "Court 7",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "indoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "c0000000-0000-4000-8000-000000000008",
+      "name": "Court 8",
+      "sport_id": "PADEL",
+      "is_active": true,
+      "properties": {
+        "resource_type": "outdoor",
+        "resource_size": "double",
+        "resource_feature": "panoramic"
+      }
+    },
+    {
+      "resource_id": "d0000000-0000-4000-8000-000000000099",
+      "name": "Old court",
+      "sport_id": "PADEL",
+      "is_active": false,
+      "properties": {
+        "resource_type": "indoor"
+      }
+    }
+  ]
+}
