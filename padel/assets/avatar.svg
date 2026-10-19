@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#1f6f8b"/>
+      <stop offset="0.55" stop-color="#124a63"/>
+      <stop offset="1" stop-color="#0a2738"/>
+    </radialGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe7ec"/>
+    </linearGradient>
+    <radialGradient id="ball" cx="38%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#f4ff8a"/>
+      <stop offset="0.6" stop-color="#d4ee2a"/>
+      <stop offset="1" stop-color="#a9c414"/>
+    </radialGradient>
+    <g id="row">
+      <circle cx="-126" cy="0" r="8.5"/><circle cx="-90" cy="0" r="8.5"/><circle cx="-54" cy="0" r="8.5"/><circle cx="-18" cy="0" r="8.5"/>
+      <circle cx="18" cy="0" r="8.5"/><circle cx="54" cy="0" r="8.5"/><circle cx="90" cy="0" r="8.5"/><circle cx="126" cy="0" r="8.5"/>
+    </g>
+    <clipPath id="headClip">
+      <ellipse cx="0" cy="-95" rx="138" ry="158"/>
+    </clipPath>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- court lines, top-down, faint -->
+  <g stroke="#ffffff" stroke-opacity="0.13" stroke-width="10" fill="none">
+    <rect x="232" y="112" width="560" height="800" rx="6"/>
+    <line x1="232" y1="512" x2="792" y2="512" stroke-opacity="0.22" stroke-width="12"/>
+    <line x1="232" y1="300" x2="792" y2="300"/>
+    <line x1="232" y1="724" x2="792" y2="724"/>
+    <line x1="512" y1="300" x2="512" y2="724"/>
+  </g>
+
+  <!-- racket -->
+  <g transform="translate(452 590) rotate(-32) scale(1.18)" filter="url(#shadow)">
+    <!-- handle -->
+    <rect x="-30" y="120" width="60" height="190" rx="22" fill="#1b1f24"/>
+    <g stroke="#3a4048" stroke-width="7">
+      <line x1="-30" y1="160" x2="30" y2="146"/>
+      <line x1="-30" y1="198" x2="30" y2="184"/>
+      <line x1="-30" y1="236" x2="30" y2="222"/>
+      <line x1="-30" y1="274" x2="30" y2="260"/>
+    </g>
+    <rect x="-36" y="296" width="72" height="22" rx="10" fill="#e8f53a"/>
+    <!-- throat -->
+    <path d="M -96 20 Q -40 70 -30 130 L 30 130 Q 40 70 96 20 Z" fill="#e8f53a"/>
+    <path d="M -46 40 Q 0 62 46 40 Q 22 82 0 96 Q -22 82 -46 40 Z" fill="#124a63"/>
+    <!-- head: rim + face + holes -->
+    <ellipse cx="0" cy="-95" rx="152" ry="172" fill="#e8f53a"/>
+    <ellipse cx="0" cy="-95" rx="138" ry="158" fill="url(#face)"/>
+    <g clip-path="url(#headClip)" fill="#124a63" fill-opacity="0.85">
+      <!-- hole grid, offset rows -->
+      <use href="#row" transform="translate(0 -262)"/>
+      <use href="#row" transform="translate(18 -230)"/>
+      <use href="#row" transform="translate(0 -198)"/>
+      <use href="#row" transform="translate(18 -166)"/>
+      <use href="#row" transform="translate(0 -134)"/>
+      <use href="#row" transform="translate(18 -102)"/>
+      <use href="#row" transform="translate(0 -70)"/>
+      <use href="#row" transform="translate(18 -38)"/>
+      <use href="#row" transform="translate(0 -6)"/>
+      <use href="#row" transform="translate(18 26)"/>
+      <use href="#row" transform="translate(0 58)"/>
+    </g>
+    <ellipse cx="0" cy="-95" rx="138" ry="158" fill="none" stroke="#1b1f24" stroke-opacity="0.12" stroke-width="6"/>
+  </g>
+
+  <!-- ball -->
+  <g filter="url(#shadow)">
+    <circle cx="712" cy="318" r="96" fill="url(#ball)"/>
+    <path d="M 637 258 C 689 287 697 358 647 400" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <path d="M 787 238 C 735 267 727 338 777 380" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>
