@@ -32,6 +32,7 @@ from padelmates import (
     Court,
     club_to_json,
     day_window,
+    parse_horizon,
     parse_slots,
 )
 
@@ -95,7 +96,8 @@ def summarise(raw: Any, club: Club) -> None:
     if not isinstance(items, list):
         print("    !! no allSlots list: the bot's parser needs updating")
         return
-    print(f"    allSlots: {len(items)}; reserved: {sum(1 for s in items if s.get('reservedIntersection'))}")
+    print(f"    allSlots: {len(items)}; reserved: {sum(1 for s in items if s.get('reservedIntersection'))}; "
+          f"horizon: {parse_horizon(raw)}; too early: {raw.get('too_early_for_advance_booking')}")
     for s in items[:2]:
         print(f"    raw: {json.dumps(s)[:600]}")
     print(f"    slot keys: {sorted({k for s in items for k in s})}")
@@ -106,8 +108,22 @@ def summarise(raw: Any, club: Club) -> None:
     first = next(s for s in items if not s.get("reservedIntersection"))
     print(f"    first free: startTime={first.get('startTime')!r} -> London {slots[0].start:%a %d %H:%M}")
     print(f"    free, London time: {min(s.start for s in slots):%H:%M} .. {max(s.start for s in slots):%H:%M}")
-    print(f"    courts: {sorted(Counter(s.court.name for s in slots))}")
+    print(f"    courts: {sorted({(s.court.name, s.court.kind) for s in slots})}")
     print(f"    durations: {dict(Counter(s.duration for s in slots))}; prices: {dict(Counter(s.price for s in slots).most_common(5))}")
+
+
+# Only what the bot reads. The rest of the response includes other players'
+# bookings (names, user ids, booking codes), which must not land in a public repo.
+KEEP = ("allSlots", "originalCourts", "too_early_for_advance_booking", "advance_booking_horizon_ends_at")
+COURT_KEEP = ("_id", "name", "indoor", "slot_duration", "future_booking_days")
+
+
+def scrub(raw: Any) -> Any:
+    if not isinstance(raw, dict):
+        return raw
+    out = {k: raw[k] for k in KEEP if k in raw}
+    out["originalCourts"] = [{k: c.get(k) for k in COURT_KEEP} for c in raw.get("originalCourts") or []]
+    return out
 
 
 def natural(name: str) -> list:
@@ -148,12 +164,16 @@ def main() -> int:
             for old in FIXTURES.glob("live_*.json"):
                 old.unlink()
             for day, data in samples.items():
-                (FIXTURES / f"live_slots_{day}.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+                (FIXTURES / f"live_slots_{day}.json").write_text(json.dumps(scrub(data), indent=1, ensure_ascii=False) + "\n")
             print(f"wrote {len(samples)} fixtures in {FIXTURES}")
         if args.write:
             items = [s for data in samples.values() for s in data.get("allSlots", [])]
-            names = sorted({s["courtName"] for s in items}, key=natural)
-            courts = {n: Court(n, n, guess_kind(n, items)) for n in names}
+            listed = {c["name"]: c.get("indoor") for data in samples.values() for c in data.get("originalCourts", [])}
+            names = sorted(set(listed) | {s["courtName"] for s in items}, key=natural)
+            courts = {
+                n: Court(n, n, ("indoor" if listed[n] else "outdoor") if isinstance(listed.get(n), bool) else guess_kind(n, items))
+                for n in names
+            }
             CLUB_FILE.write_text(json.dumps(club_to_json(Club(club_id, args.name, courts)), indent=2) + "\n")
             print(f"wrote {CLUB_FILE.name}: {[(c.name, c.kind) for c in courts.values()]}")
             if any(c.kind is None for c in courts.values()):

@@ -124,25 +124,38 @@ def day_window(d: date, tz: ZoneInfo = LONDON) -> tuple[int, int]:
 def parse_slots(raw: Any, club: Club) -> list[Slot]:
     """Free slots from an all_courts_slot_prices_v3 response, in London time.
 
-    Shape: {"allSlots": [{"courtName", "duration": 60, "price": 80,
-             "startTimestamp": <epoch ms>, "startTime": "<UTC>", "reservedIntersection": false}]}
-    One entry per court, start and bookable duration. `reservedIntersection`
-    means the slot overlaps an existing booking, so it isn't free.
+    Shape: {"allSlots": [{"courtName", "courtId", "duration": 60, "price": 80.0,
+             "startTimestamp": <epoch ms>, "startTime": "05:00" (UTC), "reservedIntersection": false}],
+            "originalCourts": [{"_id", "name", "indoor": true}],
+            "advance_booking_horizon_ends_at": <epoch ms>, ...}
+    allSlots lists only bookable slots, one per court, start and duration;
+    reservedIntersection is skipped anyway in case that ever changes.
     """
     if not isinstance(raw, dict) or not isinstance(raw.get("allSlots"), list):
         raise ShapeError(f"expected {{allSlots: [...]}}, got {_sketch(raw)}")
+    indoor = {c.get("_id"): c.get("indoor") for c in raw.get("originalCourts") or [] if isinstance(c, dict)}
     slots: list[Slot] = []
     try:
         for s in raw["allSlots"]:
             if s.get("reservedIntersection"):
                 continue
-            name = s["courtName"]
-            court = club.court(str(s.get("courtId") or s.get("court_id") or name), name)
+            court = club.court(str(s.get("courtId") or s["courtName"]), s["courtName"])
+            live = indoor.get(s.get("courtId"))
+            if isinstance(live, bool):
+                court = Court(court.id, court.name, "indoor" if live else "outdoor")
             start = datetime.fromtimestamp(int(s["startTimestamp"]) / 1000, timezone.utc).astimezone(LONDON)
             slots.append(Slot(start, int(s["duration"]), _price(s.get("price"), club.currency), court))
     except (KeyError, TypeError, ValueError) as e:
         raise ShapeError(f"bad slot: {e!r}") from e
     return slots
+
+
+def parse_horizon(raw: Any) -> datetime | None:
+    """Courts open for booking up to this moment (a rolling ~7 days ahead)."""
+    ms = raw.get("advance_booking_horizon_ends_at") if isinstance(raw, dict) else None
+    if not isinstance(ms, (int, float)):
+        return None
+    return datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(LONDON)
 
 
 def _price(value: Any, currency: str) -> str | None:
@@ -167,6 +180,8 @@ class PadelMatesClient:
         self._http = http or httpx.AsyncClient(timeout=TIMEOUT, headers=HEADERS)
         self._cache: dict[date, tuple[float, list[Slot]]] = {}
         self._locks: dict[date, asyncio.Lock] = {}
+        # Booking window end, from the latest response: no slots exist past it.
+        self.horizon: datetime | None = None
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -179,12 +194,17 @@ class PadelMatesClient:
             if hit and _time.monotonic() - hit[0] < CACHE_TTL:
                 return hit[1]
             raw = await self._fetch(d)
+            self.horizon = parse_horizon(raw) or self.horizon
             slots = sorted(
                 (s for s in parse_slots(raw, self.club) if s.start.date() == d),
                 key=lambda s: (s.start, s.court.name, s.duration),
             )
             self._cache[d] = (_time.monotonic(), slots)
             return slots
+
+    def bookable(self, when: datetime) -> bool:
+        """False once `when` is past the booking window (call after day())."""
+        return self.horizon is None or when < self.horizon
 
     async def _fetch(self, d: date) -> Any:
         start, end = day_window(d)

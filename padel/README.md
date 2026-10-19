@@ -24,7 +24,7 @@ long polling.
 
 ```
 🎾 Padium Canary Wharf, Sat 24 Oct
-✅ 18:00 free: Court 3 (indoor) 60/90 min £80/£120 · Court 8 (outdoor) 60 min £60
+✅ 18:30 free: Centre Court (indoor) 60/90 min £100/£150 · Court 3 (indoor) 60 min £80 · Outdoor Court 7 (outdoor) 60/90 min £80/£120
 Book in Padel Mates
 ```
 
@@ -47,13 +47,16 @@ GET https://fastapi-production-fargate.padelmates.io/player/player_booking/all_c
     (headers: Origin: https://padelmates.se, a browser-like User-Agent)
 ```
 
-The bot asks for one London day at a time, from local midnight to the next local midnight. That window is 23 or 25 hours on clock-change days. The response looks like `{"allSlots": [{courtName, duration, price, startTimestamp, startTime, reservedIntersection}]}`, with one entry per court, start time and duration:
+The bot asks for one London day at a time, from local midnight to the next local midnight. That window is 23 or 25 hours on clock-change days. Checked live against Padium (club `47d2eb0db7194a9dbd29783c3a2a82ad`, Oct 2026):
 
-- `startTimestamp` is epoch ms, and the bot converts it to London time.
-- `startTime` is a UTC string, which the bot ignores.
-- A slot with `reservedIntersection: true` overlaps a booking, so it isn't free.
+- `allSlots` lists only bookable slots: `{courtName, courtId, duration, price: 80.0, startTimestamp (epoch ms), startTime ("05:00", UTC), reservedIntersection, ...}`. There's one entry per court, start time and duration (60/90/120). The bot converts `startTimestamp` to London time and counts 60 and 90 min.
+- `originalCourts` gives each court's `indoor` flag. That's where "(indoor)" / "(outdoor)" comes from, with `club.json` as a fallback.
+- `advance_booking_horizon_ends_at` is where the booking window ends, about 7 days out to the minute. Past it, the API returns no slots and `too_early_for_advance_booking: true`. The bot then replies "isn't bookable yet, try from around …" instead of claiming the day is fully booked.
+- The response also carries `reservedBookings` (other players' names, ids and booking codes). The bot never uses or logs it, and `probe.py` strips it from saved fixtures.
 
-Padel Mates' `allSlots` has been seen to leave out a few free start times that the website grid shows. Treat "taken" as "probably taken", and check the app before giving up on a time.
+Another project once saw `allSlots` leave out a free start time that the website grid showed. I haven't reproduced that, but if the bot says "taken" for a time you expected free, check the app.
+
+Courts: Centre Court, Court 1, Babolat Court 2, Court 3, Checkout.com Court 4, Oysho Court 5 and Court 6 are indoor. Outdoor Court 7 and Outdoor Court 8 are outdoor. Prices: £80/£120 for 60/90 min, Centre Court £100/£150.
 
 Padium left Playtomic, and nothing for it is listed there (checked Oct 2026). `probe.py` re-checks the endpoint. Re-run it if the bot starts replying "Padel Mates sent something I don't understand".
 
@@ -69,10 +72,10 @@ Padium left Playtomic, and nothing for it is listed there (checked Oct 2026). `p
 5. **Find the club** (needs network access to `padelmates.se` and `fastapi-production-fargate.padelmates.io`):
    ```sh
    cd padel && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-   .venv/bin/python probe.py --club-id <id> --write   # id = the 32-hex in padelmates.se/club/<id> for Padium Canary Wharf
+   .venv/bin/python probe.py --club-id 47d2eb0db7194a9dbd29783c3a2a82ad --write   # Padium Canary Wharf
    git add club.json tests/fixtures && git commit -m "padel: club.json"
    ```
-   The probe prints the response shapes and writes `club.json` plus real fixtures. Without `--club-id` it tries to read the id from padelmates.se/club/padium. If a court's `kind` comes out `null`, set it to `indoor` or `outdoor` by hand.
+   This is already done and committed. The probe prints the response shapes and writes `club.json` plus scrubbed real fixtures. Re-run it if courts change.
 6. **Configure the server.** Run `cp .env.example .env`, fill in `TELEGRAM_BOT_TOKEN` (and optionally `PADIUM_CLUB_ID`), then run `./push-env.sh`.
 7. **Add GitHub secrets.** In this repo, go to Settings → Environments → `default` and add the same `DEPLOY_HOST`, `DEPLOY_USER` (root) and `DEPLOY_KEY` that fashier and www use.
 
@@ -116,4 +119,4 @@ cd padel && .venv/bin/pytest -q && .venv/bin/ruff check .
 TELEGRAM_BOT_TOKEN=… .venv/bin/python bot.py      # run locally (stop the server copy first: one poller per token)
 ```
 
-`tests/fixtures/sample_*.json` are hand-made in Padel Mates' response shape. They cover a BST Saturday, a fully booked Sunday (the day the clocks go back), and a GMT Monday. `live_slots_*.json` are real responses saved by `probe.py --write`, and a test checks that they still parse.
+`tests/fixtures/sample_*.json` are hand-made in Padel Mates' response shape. They cover a BST Saturday, a fully booked Sunday (the day the clocks go back), and a GMT Monday. `live_slots_*.json` are real Padium responses saved by `probe.py --write`, with other players' bookings stripped. A test checks that they still parse.

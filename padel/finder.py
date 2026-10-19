@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 
 from padelmates import Club, Court, Slot
@@ -120,6 +120,20 @@ def render_next(club: Club, found: tuple[datetime, list[Offer], list[tuple[datet
         lines.append("Then: " + fmt_starts(later))
     lines.append(footer(club))
     return "\n".join(lines)
+
+
+def render_not_open(club: Club, when: datetime, horizon: datetime, now: datetime) -> str:
+    """`when` is past the booking window; say roughly when it opens."""
+    window = horizon.astimezone(timezone.utc) - now.astimezone(timezone.utc)  # absolute, DST-safe
+    days = max(1, round(window.total_seconds() / 86400))
+    opens = (when.astimezone(timezone.utc) - window).astimezone(when.tzinfo)
+    half_hours = round((opens.hour * 60 + opens.minute) / 30)  # "around 20:30", not 20:29
+    opens = opens.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=30 * half_hours)
+    line = (
+        f"🕒 <b>{fmt_time(when)} isn't bookable yet.</b> Courts open {days} days ahead, "
+        f"so try from around {fmt_day(opens.date())} {fmt_time(opens)}."
+    )
+    return "\n".join([header(club, when.date()), line, footer(club)])
 
 
 def fmt_offer(o: Offer) -> str:

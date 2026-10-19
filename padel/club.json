@@ -1,0 +1,45 @@
+{
+  "club_id": "47d2eb0db7194a9dbd29783c3a2a82ad",
+  "name": "Padium Canary Wharf",
+  "timezone": "Europe/London",
+  "currency": "GBP",
+  "url": "https://padelmates.se/club/47d2eb0db7194a9dbd29783c3a2a82ad",
+  "courts": [
+    {
+      "name": "Babolat Court 2",
+      "kind": "indoor"
+    },
+    {
+      "name": "Centre Court",
+      "kind": "indoor"
+    },
+    {
+      "name": "Checkout.com Court 4",
+      "kind": "indoor"
+    },
+    {
+      "name": "Court 1",
+      "kind": "indoor"
+    },
+    {
+      "name": "Court 3",
+      "kind": "indoor"
+    },
+    {
+      "name": "Court 6",
+      "kind": "indoor"
+    },
+    {
+      "name": "Outdoor Court 7",
+      "kind": "outdoor"
+    },
+    {
+      "name": "Outdoor Court 8",
+      "kind": "outdoor"
+    },
+    {
+      "name": "Oysho Court 5",
+      "kind": "indoor"
+    }
+  ]
+}

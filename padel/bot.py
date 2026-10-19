@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from dotenv import load_dotenv
 from telegram import BotCommand, LinkPreviewOptions, Update
@@ -66,17 +66,23 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime) -> str:
     day = when.date()
-    m = finder.match(await client.day(day), when, now)
+    slots = await client.day(day)
+    if not client.bookable(when):
+        return finder.render_not_open(client.club, when, client.horizon, now)
+    m = finder.match(slots, when, now)
     next_day = None
     if m.fully_booked:
         d = day + timedelta(days=1)
-        next_day = (d, await client.day(d))
+        if client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
+            next_day = (d, await client.day(d))
     return finder.render_match(client.club, m, next_day, now)
 
 
 async def answer_next(client: PadelMatesClient, now: datetime) -> str:
     for i in range(NEXT_DAYS + 1):
         d = now.date() + timedelta(days=i)
+        if i and not client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
+            break  # past the booking window: nothing to find
         found = finder.earliest(await client.day(d), now)
         if found:
             return finder.render_next(client.club, found, NEXT_DAYS)

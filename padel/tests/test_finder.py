@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 import httpx
 import pytest
-from conftest import FIXTURES, load_fixture
+from conftest import FIXTURES, ROOT, load_fixture
 
 import finder
 from padelmates import (
@@ -12,6 +12,7 @@ from padelmates import (
     ShapeError,
     day_window,
     load_club,
+    parse_horizon,
     parse_slots,
 )
 from parser import LONDON
@@ -181,11 +182,32 @@ async def test_client_shape_change(club, payload):
         await make_client(club, lambda r: httpx.Response(200, json=payload)).day(date(2026, 10, 24))
 
 
-def test_live_fixtures_parse(club):
-    """Real responses saved by `probe.py --write` must still parse."""
+def test_live_fixtures_parse():
+    """Real Padium responses saved by `probe.py --write` must still parse."""
     live = sorted(FIXTURES.glob("live_slots_*.json"))
     if not live:
         pytest.skip("no live fixtures yet: run probe.py --write")
+    club = load_club(ROOT / "club.json", club_id="")
     for f in live:
         raw = json.loads(f.read_text())
-        assert parse_slots(raw, club) or all(s.get("reservedIntersection") for s in raw["allSlots"])
+        slots = parse_slots(raw, club)
+        assert slots, f.name
+        kinds = {s.court.name: s.court.kind for s in slots}
+        assert kinds.get("Outdoor Court 7", "outdoor") == "outdoor" and kinds.get("Court 1", "indoor") == "indoor"
+        assert {s.duration for s in slots} <= {60, 90, 120}
+        assert parse_horizon(raw) is not None
+        assert raw.keys() <= {"allSlots", "originalCourts", "too_early_for_advance_booking",
+                              "advance_booking_horizon_ends_at"}, "probe.scrub must drop other players' bookings"
+
+
+def test_live_kinds_win_over_club_file(club):
+    raw = {"allSlots": [{"courtName": "Court 3", "courtId": "c3", "duration": 60, "price": 80.0,
+                         "startTimestamp": 1792861200000, "reservedIntersection": False}],
+           "originalCourts": [{"_id": "c3", "name": "Court 3", "indoor": False}]}
+    assert parse_slots(raw, club)[0].court.kind == "outdoor"
+
+
+def test_horizon():
+    assert parse_horizon({"advance_booking_horizon_ends_at": 1793021536240}) == datetime(
+        2026, 10, 26, 13, 32, 16, 240000, tzinfo=LONDON)
+    assert parse_horizon({"allSlots": []}) is None
