@@ -41,7 +41,11 @@ jobs:
       # club.json (club id + courts) is written once by `python probe.py --club-id <id> --write`
       # and committed; without it the bot exits on start and systemd loops.
       - name: Check club.json is committed
-        run: test -f padel/club.json || { echo '::error::padel/club.json missing: run `python probe.py --club-id <id> --write` and commit it'; exit 1; }
+        run: |
+          if [ ! -f padel/club.json ]; then
+            echo '::error::padel/club.json missing - run `python probe.py --club-id <id> --write` and commit it'
+            exit 1
+          fi
 
       - name: Rsync padel bot to server
         uses: burnett01/rsync-deployments@6.0.0
