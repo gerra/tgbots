@@ -117,3 +117,34 @@ def test_kind_on_slot_and_next():
 def test_bad_ranges(text):
     with pytest.raises(ParseError):
         parse(text, NOW)
+
+
+# --- booking length ----------------------------------------------------------
+
+from parser import parse_length  # noqa: E402
+
+
+@pytest.mark.parametrize("tok,expected", [
+    ("1h", (60, 60)), ("1.5h", (90, 90)), ("2h", (120, 120)), ("90m", (90, 90)), ("90min", (90, 90)),
+    ("1h30", (90, 90)), ("1h30m", (90, 90)), ("2hrs", (120, 120)), ("1-2h", (60, 120)), ("1h-2h", (60, 120)),
+    ("60-120m", (60, 120)), ("1-1.5h", (60, 90)),
+    ("18", None), ("18-20", None), ("6pm", None), ("4pm-6pm", None), ("18:00", None), ("sat", None),
+])
+def test_parse_length(tok, expected):
+    assert parse_length(tok) == expected
+
+
+@pytest.mark.parametrize("tok", ["10h", "2-1h", "5m"])
+def test_bad_length(tok):
+    with pytest.raises(ParseError):
+        parse_length(tok)
+
+
+def test_length_in_queries():
+    assert parse("tomorrow 6pm 2h", NOW).minutes == (120, 120)
+    assert parse("tomorrow 4pm-6pm indoor 1-2h", NOW) == RangeQuery(
+        datetime(2026, 10, 20, 16, tzinfo=LONDON), datetime(2026, 10, 20, 18, tzinfo=LONDON), "indoor", (60, 120))
+    assert parse("next 1.5h outdoor", NOW) == NextQuery("outdoor", (90, 90))
+    assert parse("sat 18:00", NOW).minutes is None
+    with pytest.raises(ParseError):
+        parse("sat 18:00 1h 2h", NOW)

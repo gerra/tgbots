@@ -9,11 +9,28 @@ from html import escape
 
 from padelmates import Club, Court, Slot
 
-DURATIONS = (60, 90)
+DEFAULT_MINUTES = (60, 90)  # booking lengths counted when the query doesn't say
 NEAREST_EACH_SIDE = 3
 NEXT_DAY_STARTS = 3
 RANGE_MAX_STARTS = 8  # a long range lists this many start times, then "and N more"
 CURRENCY = {"GBP": "£", "EUR": "€", "USD": "$"}
+
+
+@dataclass(frozen=True)
+class Want:
+    """What the asker filters on: court kind and booking length."""
+    kind: str | None = None  # "indoor" / "outdoor" / None for any
+    minutes: tuple[int, int] = DEFAULT_MINUTES  # inclusive
+
+    def label(self) -> str:
+        """" · indoor · 2h" for the header; "" when nothing is filtered."""
+        parts = [self.kind] if self.kind else []
+        if self.minutes != DEFAULT_MINUTES:
+            parts.append(fmt_minutes(self.minutes))
+        return "".join(f" · {p}" for p in parts)
+
+
+ANY = Want()  # no filter: any court, default lengths
 
 
 @dataclass
@@ -45,16 +62,17 @@ class RangeMatch:
 
 # --- matching --------------------------------------------------------------
 
-def only(slots: list[Slot], kind: str | None) -> list[Slot]:
-    """Keep courts of one kind (indoor/outdoor); None keeps all."""
-    return slots if kind is None else [s for s in slots if s.court.kind == kind]
+def only(slots: list[Slot], want: Want = ANY) -> list[Slot]:
+    """Keep the slots the asker wants: booking length in range, and court kind if given."""
+    lo, hi = want.minutes
+    return [s for s in slots if lo <= s.duration <= hi and (want.kind is None or s.court.kind == want.kind)]
 
 
 def group(slots: list[Slot], now: datetime) -> Groups:
-    """Free 60/90 min slots from `now` on, grouped by start time (sorted)."""
+    """Free slots from `now` on, grouped by start time (sorted). Filter with only() first."""
     by_start: dict[datetime, dict[str, Offer]] = {}
     for s in slots:
-        if s.duration not in DURATIONS or s.start < now:
+        if s.start < now:
             continue
         offers = by_start.setdefault(s.start, {})
         offer = offers.setdefault(s.court.id, Offer(s.court))
@@ -107,9 +125,8 @@ def earliest(slots: list[Slot], now: datetime) -> tuple[datetime, list[Offer], l
 
 # --- rendering (Telegram HTML) ---------------------------------------------
 
-def header(club: Club, d: date | None = None, kind: str | None = None) -> str:
-    title = f"🎾 <b>{escape(club.name)}</b>" + (f", {fmt_day(d)}" if d else "")
-    return f"{title} · {kind}" if kind else title
+def header(club: Club, d: date | None = None, want: Want = ANY) -> str:
+    return f"🎾 <b>{escape(club.name)}</b>" + (f", {fmt_day(d)}" if d else "") + want.label()
 
 
 def none_left(d: date, kind: str | None, too: bool = False) -> str:
@@ -119,31 +136,31 @@ def none_left(d: date, kind: str | None, too: bool = False) -> str:
     return f"{fmt_day(d)} is fully booked{' too' if too else ''}."
 
 
-def next_day_lines(next_day: tuple[date, list[Slot]], kind: str | None, now: datetime) -> list[str]:
+def next_day_lines(next_day: tuple[date, list[Slot]], want: Want, now: datetime) -> list[str]:
     d, slots = next_day
     starts = first_free(slots, now)
-    return [f"First free on {fmt_day(d)}:", *fmt_starts(starts)] if starts else [none_left(d, kind, too=True)]
+    return [f"First free on {fmt_day(d)}:", *fmt_starts(starts)] if starts else [none_left(d, want.kind, too=True)]
 
 
 def render_match(club: Club, m: Match, next_day: tuple[date, list[Slot]] | None = None, now: datetime | None = None,
-                 kind: str | None = None) -> str:
+                 want: Want = ANY) -> str:
     t = fmt_time(m.when)
-    lines = [header(club, m.when.date(), kind)]
+    lines = [header(club, m.when.date(), want)]
     if m.exact:
         lines += [f"✅ <b>{t} free:</b>", *bullets(fmt_offer(o) for o in m.exact)]
     elif not m.fully_booked:
         lines += [f"❌ <b>{t} taken.</b> Nearest:", *fmt_starts(m.nearest)]
     else:
-        lines.append(f"❌ <b>{none_left(m.when.date(), kind)}</b>")
+        lines.append(f"❌ <b>{none_left(m.when.date(), want.kind)}</b>")
         if next_day is not None:
-            lines += next_day_lines(next_day, kind, now or m.when)
+            lines += next_day_lines(next_day, want, now or m.when)
     return "\n".join(lines)
 
 
 def render_range(club: Club, rm: RangeMatch, next_day: tuple[date, list[Slot]] | None = None,
-                 now: datetime | None = None, kind: str | None = None) -> str:
+                 now: datetime | None = None, want: Want = ANY) -> str:
     span = f"{fmt_time(rm.start)}–{fmt_time(rm.end)}"
-    lines = [header(club, rm.start.date(), kind)]
+    lines = [header(club, rm.start.date(), want)]
     if rm.found:
         lines.append(f"✅ <b>Free {span}:</b>")
         for t, offers in rm.found[:RANGE_MAX_STARTS]:
@@ -154,25 +171,25 @@ def render_range(club: Club, rm: RangeMatch, next_day: tuple[date, list[Slot]] |
     elif not rm.fully_booked:
         lines += [f"❌ <b>Nothing free {span}.</b> Nearest:", *fmt_starts(rm.nearest)]
     else:
-        lines.append(f"❌ <b>{none_left(rm.start.date(), kind)}</b>")
+        lines.append(f"❌ <b>{none_left(rm.start.date(), want.kind)}</b>")
         if next_day is not None:
-            lines += next_day_lines(next_day, kind, now or rm.start)
+            lines += next_day_lines(next_day, want, now or rm.start)
     return "\n".join(lines)
 
 
 def render_next(club: Club, found: tuple[datetime, list[Offer], list[tuple[datetime, int]]] | None, days: int,
-                kind: str | None = None) -> str:
+                want: Want = ANY) -> str:
     if found is None:
-        what = f"No {kind} courts" if kind else "Nothing"
-        return "\n".join([header(club, kind=kind), f"😕 {what} free in the next {days} days."])
+        what = f"No {want.kind} courts" if want.kind else "Nothing"
+        return "\n".join([header(club, want=want), f"😕 {what} free in the next {days} days."])
     start, offers, later = found
-    lines = [header(club, start.date(), kind), f"✅ <b>{fmt_time(start)} free:</b>", *bullets(fmt_offer(o) for o in offers)]
+    lines = [header(club, start.date(), want), f"✅ <b>{fmt_time(start)} free:</b>", *bullets(fmt_offer(o) for o in offers)]
     if later:
         lines += ["Then:", *fmt_starts(later)]
     return "\n".join(lines)
 
 
-def render_not_open(club: Club, when: datetime, horizon: datetime, now: datetime, kind: str | None = None) -> str:
+def render_not_open(club: Club, when: datetime, horizon: datetime, now: datetime, want: Want = ANY) -> str:
     """`when` is past the booking window; say roughly when it opens."""
     window = horizon.astimezone(timezone.utc) - now.astimezone(timezone.utc)  # absolute, DST-safe
     days = max(1, round(window.total_seconds() / 86400))
@@ -183,7 +200,7 @@ def render_not_open(club: Club, when: datetime, horizon: datetime, now: datetime
         f"🕒 <b>{fmt_time(when)} isn't bookable yet.</b> Courts open {days} days ahead, "
         f"so try from around {fmt_day(opens.date())} {fmt_time(opens)}."
     )
-    return "\n".join([header(club, when.date(), kind), line])
+    return "\n".join([header(club, when.date(), want), line])
 
 
 def fmt_offer(o: Offer) -> str:
@@ -220,6 +237,16 @@ def fmt_price(raw: str | None) -> str | None:
     cur = m.group(2) or ""
     sym = CURRENCY.get(cur)
     return f"{sym}{num}" if sym else f"{num} {cur}".strip()
+
+
+def fmt_minutes(span: tuple[int, int]) -> str:
+    """(120, 120) -> "2h", (60, 120) -> "1–2h", (45, 45) -> "45m"."""
+    def one(m: int) -> str:
+        return f"{m / 60:g}h" if m % 30 == 0 else f"{m}m"
+    lo, hi = span
+    if lo == hi:
+        return one(lo)
+    return f"{one(lo)[:-1]}–{one(hi)}" if one(lo)[-1] == one(hi)[-1] else f"{one(lo)}–{one(hi)}"
 
 
 def fmt_time(t: datetime) -> str:

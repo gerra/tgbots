@@ -26,7 +26,7 @@ def london(d, h, m=0):
 
 def day_slots(club, day: str):
     d = date.fromisoformat(day)
-    return [s for s in parse_slots(load_fixture(f"sample_slots_{day}.json"), club) if s.start.date() == d]
+    return finder.only([s for s in parse_slots(load_fixture(f"sample_slots_{day}.json"), club) if s.start.date() == d])
 
 
 def test_club_file(club):
@@ -218,9 +218,9 @@ def test_horizon():
 
 def test_only_kind(club):
     slots = day_slots(club, "2026-10-24")
-    assert {s.court.name for s in finder.only(slots, "outdoor")} == {"Court 8"}
-    assert "Court 8" not in {s.court.name for s in finder.only(slots, "indoor")}
-    assert finder.only(slots, None) == slots
+    assert {s.court.name for s in finder.only(slots, finder.Want("outdoor"))} == {"Court 8"}
+    assert "Court 8" not in {s.court.name for s in finder.only(slots, finder.Want("indoor"))}
+    assert finder.only(slots) == slots
 
 
 def test_range_lists_every_start_inclusive(club):
@@ -228,7 +228,7 @@ def test_range_lists_every_start_inclusive(club):
     assert [(t.strftime("%H:%M"), [o.court.name for o in offers]) for t, offers in rm.found] == [
         ("17:00", ["Court 1", "Court 8"]), ("18:00", ["Court 3", "Court 8"]), ("19:30", ["Court 1"]),
     ]
-    text = finder.render_range(club, rm, kind=None)
+    text = finder.render_range(club, rm)
     assert text.splitlines()[:4] == [
         "🎾 <b>Padium Canary Wharf</b>, Sat 24 Oct", "✅ <b>Free 17:00–19:30:</b>", "<b>17:00</b>",
         "• Court 1 (indoor) 90 min £120",
@@ -253,10 +253,26 @@ def test_range_caps_long_lists(club):
 
 def test_kind_wording(club):
     m = finder.match([], london(25, 18), MON_NOON)
-    text = finder.render_match(club, m, (date(2026, 10, 26), []), MON_NOON, kind="indoor")
+    text = finder.render_match(club, m, (date(2026, 10, 26), []), MON_NOON, finder.Want("indoor"))
     assert text.splitlines() == [
         "🎾 <b>Padium Canary Wharf</b>, Sun 25 Oct · indoor",
         "❌ <b>No indoor courts free on Sun 25 Oct.</b>",
         "No indoor courts free on Mon 26 Oct either.",
     ]
-    assert "😕 No outdoor courts free in the next 7 days." in finder.render_next(club, None, 7, kind="outdoor")
+    assert "😕 No outdoor courts free in the next 7 days." in finder.render_next(club, None, 7, finder.Want("outdoor"))
+
+
+def test_length_filter(club):
+    raw = [s for s in parse_slots(load_fixture("sample_slots_2026-10-24.json"), club) if s.start.date() == date(2026, 10, 24)]
+    two_hours = finder.only(raw, finder.Want(minutes=(120, 120)))
+    assert [(s.start.strftime("%H:%M"), s.court.name) for s in two_hours] == [("18:00", "Court 3")]
+    m = finder.match(finder.only(raw, finder.Want(minutes=(60, 120))), london(24, 18), MON_NOON)
+    assert finder.fmt_offer(m.exact[0]) == "Court 3 (indoor) 60/90/120 min £80/£120/£160"
+    text = finder.render_match(club, m, want=finder.Want("indoor", (60, 120)))
+    assert text.startswith("🎾 <b>Padium Canary Wharf</b>, Sat 24 Oct · indoor · 1–2h")
+
+
+@pytest.mark.parametrize("span,label", [((60, 60), "1h"), ((90, 90), "1.5h"), ((120, 120), "2h"), ((60, 120), "1–2h"),
+                                        ((45, 45), "45m"), ((45, 90), "45m–1.5h"), ((60, 90), "1–1.5h")])
+def test_fmt_minutes(span, label):
+    assert finder.fmt_minutes(span) == label

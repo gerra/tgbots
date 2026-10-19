@@ -20,13 +20,14 @@ long polling.
 | `/padel tomorrow 4pm-6pm` | every free start time in a range, both ends included (also `16:00-18:00`, `4-6pm`, `4pm to 6pm`) |
 | `/padel next` | earliest free slot from now, up to 7 days ahead |
 | add `indoor` / `outdoor` | to any of the above: `/padel tomorrow 6pm indoor`, `/padel next outdoor` |
+| add a length | `1h`, `1.5h`, `2h` (also `90m`, `1h30`), or a span like `1-2h`: `/padel next 1-2h`, `/padel sat 5-7pm indoor 2h` |
 | `/booked sat 18:00 court 3 90 £120` | post a game card for a court you booked (court, minutes and price optional, any order) |
 | `/games` | games tracked in this chat: how many are in, how many still owe |
 | `/padel` | usage |
 
 - **Days:** `today`, `tomorrow`, `mon`..`sun` (the next occurrence, or today if it's that day and the time hasn't passed yet), and `dd/mm`.
 - **Times:** `18:00`, `18`, `6pm`, `6:30pm`.
-- All times are Europe/London. Only 60 and 90 min slots are counted. A court that's free only for a 2-hour booking at some time doesn't show there.
+- All times are Europe/London. Without a length, 60 and 90 min bookings are counted. A court that's free only for a 2-hour booking at some time shows up with `2h` or `1-2h`.
 
 ```
 🎾 Padium Canary Wharf, Sat 24 Oct

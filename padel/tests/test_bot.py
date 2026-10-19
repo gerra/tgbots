@@ -200,11 +200,11 @@ async def test_booked_command(club):
 async def test_indoor_filter_and_range_buttons(club):
     client = fixture_client(club)
     ctx = FakeContext(client)
-    a = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, "outdoor")
+    a = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, finder.Want("outdoor"))
     assert "· outdoor" in a.text and "Court 3" not in a.text and "Court 8 (outdoor)" in a.text
 
     a = await bot.answer_range(client, datetime(2026, 10, 24, 17, tzinfo=LONDON),
-                               datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, "indoor")
+                               datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, finder.Want("indoor"))
     assert "Court 8" not in a.text
     labels = [t for t, _ in buttons(bot.offer_keyboard(ctx, client, a))]
     assert labels == ["📲 Book in Padel Mates", "📌 17:00 Court 1 · 90m", "📌 18:00 Court 3 · 60m", "📌 18:00 Court 3 · 90m"]
@@ -218,5 +218,5 @@ async def test_indoor_filter_and_range_buttons(club):
 
 
 async def test_next_indoor_skips_outdoor(club):
-    a = await bot.answer_next(fixture_client(club), MON_NOON, "outdoor")
+    a = await bot.answer_next(fixture_client(club), MON_NOON, finder.Want("outdoor"))
     assert "✅ <b>17:00 free:</b>\n• Court 8 (outdoor) 60 min £60" in a.text

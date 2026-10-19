@@ -49,7 +49,9 @@ USAGE = (
     "<code>/padel tomorrow 7pm</code>\n"
     "<code>/padel 24/10 19:30</code>\n"
     "<code>/padel tomorrow 4pm-6pm indoor</code> – every free start in a range\n"
-    "<code>/padel next</code> – earliest free slot (add <code>indoor</code>/<code>outdoor</code> to any of these)\n"
+    "<code>/padel next</code> – earliest free slot\n"
+    "Add <code>indoor</code>/<code>outdoor</code> and a length (<code>1h</code>, <code>1.5h</code>, <code>2h</code>, "
+    "<code>1-2h</code>; default 1–1.5h) to any of these.\n"
     "Days: today, tomorrow, mon–sun, dd/mm. Times: 18:00, 18, 6pm, 6:30pm. London time.\n\n"
     "<b>Booked a court?</b> Tap its 📌 button under a /padel answer, or\n"
     "<code>/booked sat 18:00 court 3 90 £120</code>\n"
@@ -93,12 +95,13 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     client: PadelMatesClient = context.bot_data["client"]
     await msg.chat.send_action(ChatAction.TYPING)
     try:
+        want = finder.Want(query.kind, query.minutes or finder.DEFAULT_MINUTES)
         if isinstance(query, NextQuery):
-            answer = await answer_next(client, now, query.kind)
+            answer = await answer_next(client, now, want)
         elif isinstance(query, RangeQuery):
-            answer = await answer_range(client, query.start, query.end, now, query.kind)
+            answer = await answer_range(client, query.start, query.end, now, want)
         else:
-            answer = await answer_slot(client, query.when, now, query.kind)
+            answer = await answer_slot(client, query.when, now, want)
     except ShapeError:
         log.exception("unexpected Padel Mates response for %s", context.args)
         answer = Reply(CHANGED)
@@ -109,43 +112,43 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await send(msg, text, reply=True, markup=offer_keyboard(context, client, answer))
 
 
-async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime, kind: str | None = None) -> Reply:
-    slots = finder.only(await client.day(when.date()), kind)
+async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime, want: finder.Want = finder.ANY) -> Reply:
+    slots = finder.only(await client.day(when.date()), want)
     if not client.bookable(when):
-        return Reply(finder.render_not_open(client.club, when, client.horizon, now, kind))
+        return Reply(finder.render_not_open(client.club, when, client.horizon, now, want))
     m = finder.match(slots, when, now)
-    next_day = await next_day_slots(client, when, kind) if m.fully_booked else None
-    return Reply(finder.render_match(client.club, m, next_day, now, kind), [(when, o) for o in m.exact])
+    next_day = await next_day_slots(client, when, want) if m.fully_booked else None
+    return Reply(finder.render_match(client.club, m, next_day, now, want), [(when, o) for o in m.exact])
 
 
 async def answer_range(client: PadelMatesClient, start: datetime, end: datetime, now: datetime,
-                       kind: str | None = None) -> Reply:
-    slots = finder.only(await client.day(start.date()), kind)
+                       want: finder.Want = finder.ANY) -> Reply:
+    slots = finder.only(await client.day(start.date()), want)
     if not client.bookable(start):
-        return Reply(finder.render_not_open(client.club, start, client.horizon, now, kind))
+        return Reply(finder.render_not_open(client.club, start, client.horizon, now, want))
     rm = finder.match_range(slots, start, end, now)
-    next_day = await next_day_slots(client, start, kind) if rm.fully_booked else None
+    next_day = await next_day_slots(client, start, want) if rm.fully_booked else None
     shown = rm.found[:finder.RANGE_MAX_STARTS]
-    return Reply(finder.render_range(client.club, rm, next_day, now, kind), [(t, o) for t, offers in shown for o in offers])
+    return Reply(finder.render_range(client.club, rm, next_day, now, want), [(t, o) for t, offers in shown for o in offers])
 
 
-async def next_day_slots(client: PadelMatesClient, when: datetime, kind: str | None):
+async def next_day_slots(client: PadelMatesClient, when: datetime, want: finder.Want):
     """The day after `when`, for "fully booked: first free tomorrow is…", if it's bookable yet."""
     d = when.date() + timedelta(days=1)
     if not client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
         return None
-    return d, finder.only(await client.day(d), kind)
+    return d, finder.only(await client.day(d), want)
 
 
-async def answer_next(client: PadelMatesClient, now: datetime, kind: str | None = None) -> Reply:
+async def answer_next(client: PadelMatesClient, now: datetime, want: finder.Want = finder.ANY) -> Reply:
     for i in range(NEXT_DAYS + 1):
         d = now.date() + timedelta(days=i)
         if i and not client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
             break  # past the booking window: nothing to find
-        found = finder.earliest(finder.only(await client.day(d), kind), now)
+        found = finder.earliest(finder.only(await client.day(d), want), now)
         if found:
-            return Reply(finder.render_next(client.club, found, NEXT_DAYS, kind), [(found[0], o) for o in found[1]])
-    return Reply(finder.render_next(client.club, None, NEXT_DAYS, kind))
+            return Reply(finder.render_next(client.club, found, NEXT_DAYS, want), [(found[0], o) for o in found[1]])
+    return Reply(finder.render_next(client.club, None, NEXT_DAYS, want))
 
 
 def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient, answer: Reply) -> InlineKeyboardMarkup:
