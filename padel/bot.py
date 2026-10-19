@@ -35,7 +35,7 @@ from telegram.ext import (
 import finder
 import games
 from padelmates import BookingSiteError, PadelMatesClient, ShapeError, load_club
-from parser import LONDON, NextQuery, ParseError, parse
+from parser import LONDON, NextQuery, ParseError, RangeQuery, parse
 
 log = logging.getLogger("padel")
 
@@ -48,7 +48,8 @@ USAGE = (
     "<code>/padel sat 18:00</code>\n"
     "<code>/padel tomorrow 7pm</code>\n"
     "<code>/padel 24/10 19:30</code>\n"
-    "<code>/padel next</code> – earliest free slot\n"
+    "<code>/padel tomorrow 4pm-6pm indoor</code> – every free start in a range\n"
+    "<code>/padel next</code> – earliest free slot (add <code>indoor</code>/<code>outdoor</code> to any of these)\n"
     "Days: today, tomorrow, mon–sun, dd/mm. Times: 18:00, 18, 6pm, 6:30pm. London time.\n\n"
     "<b>Booked a court?</b> Tap its 📌 button under a /padel answer, or\n"
     "<code>/booked sat 18:00 court 3 90 £120</code>\n"
@@ -63,11 +64,13 @@ CHANGED = "😕 Padel Mates sent something I don't understand (their API may hav
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
+MAX_PIN_ROWS = 8  # 📌 rows under one answer; a long range shows the earliest ones
+
+
 @dataclass
 class Reply:
     text: str
-    when: datetime | None = None  # start time of `offers`
-    offers: list[finder.Offer] = field(default_factory=list)  # free courts you could book from here
+    offers: list[tuple[datetime, finder.Offer]] = field(default_factory=list)  # (start, free court) you could book
 
 
 def now_london() -> datetime:
@@ -91,9 +94,11 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await msg.chat.send_action(ChatAction.TYPING)
     try:
         if isinstance(query, NextQuery):
-            answer = await answer_next(client, now)
+            answer = await answer_next(client, now, query.kind)
+        elif isinstance(query, RangeQuery):
+            answer = await answer_range(client, query.start, query.end, now, query.kind)
         else:
-            answer = await answer_slot(client, query.when, now)
+            answer = await answer_slot(client, query.when, now, query.kind)
     except ShapeError:
         log.exception("unexpected Padel Mates response for %s", context.args)
         answer = Reply(CHANGED)
@@ -104,29 +109,43 @@ async def padel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await send(msg, text, reply=True, markup=offer_keyboard(context, client, answer))
 
 
-async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime) -> Reply:
-    day = when.date()
-    slots = await client.day(day)
+async def answer_slot(client: PadelMatesClient, when: datetime, now: datetime, kind: str | None = None) -> Reply:
+    slots = finder.only(await client.day(when.date()), kind)
     if not client.bookable(when):
-        return Reply(finder.render_not_open(client.club, when, client.horizon, now))
+        return Reply(finder.render_not_open(client.club, when, client.horizon, now, kind))
     m = finder.match(slots, when, now)
-    next_day = None
-    if m.fully_booked:
-        d = day + timedelta(days=1)
-        if client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
-            next_day = (d, await client.day(d))
-    return Reply(finder.render_match(client.club, m, next_day, now), when, m.exact)
+    next_day = await next_day_slots(client, when, kind) if m.fully_booked else None
+    return Reply(finder.render_match(client.club, m, next_day, now, kind), [(when, o) for o in m.exact])
 
 
-async def answer_next(client: PadelMatesClient, now: datetime) -> Reply:
+async def answer_range(client: PadelMatesClient, start: datetime, end: datetime, now: datetime,
+                       kind: str | None = None) -> Reply:
+    slots = finder.only(await client.day(start.date()), kind)
+    if not client.bookable(start):
+        return Reply(finder.render_not_open(client.club, start, client.horizon, now, kind))
+    rm = finder.match_range(slots, start, end, now)
+    next_day = await next_day_slots(client, start, kind) if rm.fully_booked else None
+    shown = rm.found[:finder.RANGE_MAX_STARTS]
+    return Reply(finder.render_range(client.club, rm, next_day, now, kind), [(t, o) for t, offers in shown for o in offers])
+
+
+async def next_day_slots(client: PadelMatesClient, when: datetime, kind: str | None):
+    """The day after `when`, for "fully booked: first free tomorrow is…", if it's bookable yet."""
+    d = when.date() + timedelta(days=1)
+    if not client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
+        return None
+    return d, finder.only(await client.day(d), kind)
+
+
+async def answer_next(client: PadelMatesClient, now: datetime, kind: str | None = None) -> Reply:
     for i in range(NEXT_DAYS + 1):
         d = now.date() + timedelta(days=i)
         if i and not client.bookable(datetime.combine(d, time(0), tzinfo=LONDON)):
             break  # past the booking window: nothing to find
-        found = finder.earliest(await client.day(d), now)
+        found = finder.earliest(finder.only(await client.day(d), kind), now)
         if found:
-            return Reply(finder.render_next(client.club, found, NEXT_DAYS), found[0], found[1])
-    return Reply(finder.render_next(client.club, None, NEXT_DAYS))
+            return Reply(finder.render_next(client.club, found, NEXT_DAYS, kind), [(found[0], o) for o in found[1]])
+    return Reply(finder.render_next(client.club, None, NEXT_DAYS, kind))
 
 
 def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient, answer: Reply) -> InlineKeyboardMarkup:
@@ -135,16 +154,19 @@ def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient,
     Padel Mates has no link to a given slot or even a day, so the link is the club page.
     """
     rows = [[InlineKeyboardButton("📲 Book in Padel Mates", url=client.club.url)]]
-    if answer.offers and answer.when:
+    offers = answer.offers[:MAX_PIN_ROWS]
+    if offers:
+        several_times = len({when for when, _ in offers}) > 1
         choices = [
-            (answer.when, o.court.name, o.court.kind, minutes, _amount(o.prices[minutes]))
-            for o in answer.offers for minutes in sorted(o.prices)
+            (when, o.court.name, o.court.kind, minutes, _amount(o.prices[minutes]))
+            for when, o in offers for minutes in sorted(o.prices)
         ]
         key = remember_offers(context, choices)
-        for o in answer.offers:
+        for when, o in offers:
+            label = f"{finder.fmt_time(when)} {o.court.name}" if several_times else o.court.name
             rows.append([
-                InlineKeyboardButton(f"📌 {name} · {minutes}m", callback_data=f"bk:{key}:{i}")
-                for i, (_, name, _, minutes, _) in enumerate(choices) if name == o.court.name
+                InlineKeyboardButton(f"📌 {label} · {minutes}m", callback_data=f"bk:{key}:{i}")
+                for i, (w, name, _, minutes, _) in enumerate(choices) if w == when and name == o.court.name
             ])
     return InlineKeyboardMarkup(rows)
 

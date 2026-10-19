@@ -1,9 +1,11 @@
-"""Turn `/padel` arguments into a London date + time.
+"""Turn `/padel` arguments into a London date + time (or time range).
 
-Accepted (in either order, case-insensitive):
-  day:  today, tomorrow, mon..sun (or full names), dd/mm, dd/mm/yyyy
-  time: 18:00, 18, 18.30, 6pm, 6:30pm, 6 pm
-Or the single word `next`.
+Accepted (in any order, case-insensitive):
+  day:   today, tomorrow, mon..sun (or full names), dd/mm, dd/mm/yyyy
+  time:  18:00, 18, 18.30, 6pm, 6:30pm, 6 pm
+  range: 4pm-6pm, 16:00-18:00, 4-6pm, 4pm to 6pm (start times, both ends included)
+  kind:  indoor / outdoor (also indoors, inside, outdoors, outside), optional
+Or `next`, optionally with a kind.
 """
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ WEEKDAYS = {
 }
 TODAY_WORDS = {"today", "tonight"}
 TOMORROW_WORDS = {"tomorrow", "tmrw", "tmr", "tom"}
+KINDS = {"indoor": "indoor", "indoors": "indoor", "inside": "indoor",
+         "outdoor": "outdoor", "outdoors": "outdoor", "outside": "outdoor"}
 
 _DATE_RE = re.compile(r"^(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2}|\d{4}))?$")
 _TIME_RE = re.compile(r"^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?$")
@@ -38,44 +42,82 @@ class ParseError(ValueError):
 class SlotQuery:
     """A specific day and start time, as a London-aware datetime."""
     when: datetime
+    kind: str | None = None  # "indoor" / "outdoor" / None for any
+
+
+@dataclass(frozen=True)
+class RangeQuery:
+    """Every free start time from `start` to `end`, both included."""
+    start: datetime
+    end: datetime
+    kind: str | None = None
 
 
 @dataclass(frozen=True)
 class NextQuery:
     """`/padel next`: earliest free slot from now."""
+    kind: str | None = None
 
 
-def parse(text: str | list[str], now: datetime) -> SlotQuery | NextQuery:
+def parse(text: str | list[str], now: datetime) -> SlotQuery | RangeQuery | NextQuery:
     """Parse command arguments. `now` must be timezone-aware."""
     tokens = text.split() if isinstance(text, str) else list(text)
     tokens = [t.strip().lower() for t in tokens if t.strip()]
+    kinds = {KINDS[t] for t in tokens if t in KINDS}
+    if len(kinds) > 1:
+        raise ParseError("indoor or outdoor, not both")
+    kind = kinds.pop() if kinds else None
+    tokens = [t for t in tokens if t not in KINDS]
     if not tokens:
         raise ParseError("empty")
     if tokens == ["next"]:
-        return NextQuery()
+        return NextQuery(kind)
 
-    # "6 pm" -> "6pm"
-    merged: list[str] = []
-    for tok in tokens:
-        if tok in ("am", "pm") and merged and re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?", merged[-1]):
-            merged[-1] += tok
-        else:
-            merged.append(tok)
-    if len(merged) != 2:
+    joined = " ".join(tokens)
+    joined = re.sub(r"\s*(?:-|–|—|\bto\b)\s*", "-", joined)  # "4pm - 6pm", "4pm to 6pm" -> "4pm-6pm"
+    joined = re.sub(r"(\d)\s+(am|pm)\b", r"\1\2", joined)  # "6 pm" -> "6pm"
+    parts = joined.split()
+    if len(parts) != 2:
         raise ParseError("need a day and a time")
 
     now = now.astimezone(LONDON)
-    a, b = merged
-    t = parse_time(b)
-    if t is not None:
+    a, b = parts
+    if span := parse_span(b):
         day_tok = a
-    else:
-        t = parse_time(a)
+    elif span := parse_span(a):
         day_tok = b
-        if t is None:
-            raise ParseError(f"bad time: {b}")
-    d = parse_day(day_tok, t, now)
-    return SlotQuery(datetime.combine(d, t, tzinfo=LONDON))
+    else:
+        raise ParseError(f"bad time: {joined}")
+    start, end = span
+    d = parse_day(day_tok, end or start, now)
+    if end is None:
+        return SlotQuery(datetime.combine(d, start, tzinfo=LONDON), kind)
+    return RangeQuery(datetime.combine(d, start, tzinfo=LONDON), datetime.combine(d, end, tzinfo=LONDON), kind)
+
+
+def parse_span(tok: str) -> tuple[time, time | None] | None:
+    """"18:00" -> (18:00, None); "4-6pm" -> (16:00, 18:00). None if it isn't a time."""
+    if "-" not in tok:
+        t = parse_time(tok)
+        return (t, None) if t else None
+    a, b = tok.split("-", 1)
+    end = parse_time(b)
+    start = parse_time(a)
+    if end is None or start is None:
+        return None
+    suffix = re.search(r"(am|pm)$", b)
+    if suffix and not re.search(r"(am|pm)$", a):
+        # "4-6pm" is 4pm-6pm, but "11-1pm" is 11am-1pm
+        for s in (suffix.group(1), "am"):
+            t = parse_time(a + s)
+            if t is not None and t < end:
+                start = t
+                break
+    elif not suffix and end <= start and end.hour < 12:
+        end = end.replace(hour=end.hour + 12)  # "6pm-8" means until 8pm
+    if end <= start:
+        raise ParseError(f"range ends before it starts: {tok}")
+    return start, end
 
 
 def parse_time(tok: str) -> time | None:

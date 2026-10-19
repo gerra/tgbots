@@ -72,3 +72,48 @@ def test_next():
 def test_bad_input(text):
     with pytest.raises(ParseError):
         parse(text, NOW)
+
+
+# --- indoor/outdoor and ranges ----------------------------------------------
+
+from parser import RangeQuery  # noqa: E402
+
+
+def rng(text, now=NOW):
+    q = parse(text, now)
+    assert isinstance(q, RangeQuery)
+    return q.start.strftime("%a %H:%M"), q.end.strftime("%H:%M"), q.kind
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("tomorrow 4pm-6pm indoor", ("Tue 16:00", "18:00", "indoor")),
+    ("tomorrow 4pm - 6pm", ("Tue 16:00", "18:00", None)),
+    ("tomorrow 4pm to 6pm", ("Tue 16:00", "18:00", None)),
+    ("sat 16:00-18:00 outside", ("Sat 16:00", "18:00", "outdoor")),
+    ("sat 16:00–18:00", ("Sat 16:00", "18:00", None)),
+    ("sat 4-6pm", ("Sat 16:00", "18:00", None)),
+    ("sat 11-1pm", ("Sat 11:00", "13:00", None)),
+    ("sat 6pm-8", ("Sat 18:00", "20:00", None)),
+    ("indoors 16-18 sat", ("Sat 16:00", "18:00", "indoor")),
+    ("mon 10am-8pm", ("Mon 10:00", "20:00", None)),  # ends after now: still today
+    ("mon 9am-11am", ("Mon 09:00", "11:00", None)),  # ended: next week
+])
+def test_ranges(text, expected):
+    assert rng(text) == expected
+
+
+def test_mon_range_rolls_over_when_ended():
+    assert parse("mon 9am-11am", NOW).start.date().isoformat() == "2026-10-26"
+
+
+def test_kind_on_slot_and_next():
+    assert parse("tomorrow 6pm indoor", NOW).kind == "indoor"
+    assert parse("outdoor sat 18:00", NOW).kind == "outdoor"
+    assert parse("next indoor", NOW) == NextQuery("indoor")
+    assert parse("next", NOW) == NextQuery()
+
+
+@pytest.mark.parametrize("text", ["sat 6pm-4pm", "sat 18-16", "sat 4pm-6pm indoor outdoor", "indoor", "sat 4pm-"])
+def test_bad_ranges(text):
+    with pytest.raises(ParseError):
+        parse(text, NOW)

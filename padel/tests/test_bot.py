@@ -195,3 +195,28 @@ async def test_booked_command(club):
     ctx.args = ["whenever"]
     await bot.booked(upd, ctx)
     assert chat.sent[-1][0].startswith("Usage: <code>/booked")
+
+
+async def test_indoor_filter_and_range_buttons(club):
+    client = fixture_client(club)
+    ctx = FakeContext(client)
+    a = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, "outdoor")
+    assert "· outdoor" in a.text and "Court 3" not in a.text and "Court 8 (outdoor)" in a.text
+
+    a = await bot.answer_range(client, datetime(2026, 10, 24, 17, tzinfo=LONDON),
+                               datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, "indoor")
+    assert "Court 8" not in a.text
+    labels = [t for t, _ in buttons(bot.offer_keyboard(ctx, client, a))]
+    assert labels == ["📲 Book in Padel Mates", "📌 17:00 Court 1 · 90m", "📌 18:00 Court 3 · 60m", "📌 18:00 Court 3 · 90m"]
+
+    # the 📌 under a range books the right start time
+    data = dict(buttons(bot.offer_keyboard(ctx, client, a)))["📌 17:00 Court 1 · 90m"]
+    chat = FakeMessage()
+    upd, q = tap(data, 1, "Anna", chat)
+    await bot.on_booked_button(upd, ctx)
+    assert "Sat 24 Oct 17:00 · Court 1 (indoor) · 90 min" in chat.sent[0][0]
+
+
+async def test_next_indoor_skips_outdoor(club):
+    a = await bot.answer_next(fixture_client(club), MON_NOON, "outdoor")
+    assert "✅ <b>17:00 free:</b>\n• Court 8 (outdoor) 60 min £60" in a.text
