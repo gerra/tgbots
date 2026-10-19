@@ -3,7 +3,7 @@
     python probe.py --club-id <id>                # print what comes back for today + Saturday
     python probe.py --club-id <id> --write        # ...and write club.json + tests/fixtures/live_*.json
     python probe.py --club-id <id> --fixtures     # live fixtures only (any club), no club.json
-    python probe.py                               # try to discover the id from padelmates.se/club/padium
+    python probe.py --write                       # id from PADIUM_CLUB_ID (.env) or club.json
 
 The club id is the 32-hex string in the padelmates.se/club/<id> URL that
 the Padel Mates app or website shows for Padium Canary Wharf.
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 
 from padelmates import (
     CLUB_FILE,
@@ -140,6 +142,16 @@ def guess_kind(name: str, samples: list[dict]) -> str | None:
     return None
 
 
+def known_club_id() -> str | None:
+    """--club-id's fallback: PADIUM_CLUB_ID (env or .env), then the committed club.json."""
+    load_dotenv(HERE / ".env")
+    if os.environ.get("PADIUM_CLUB_ID"):
+        return os.environ["PADIUM_CLUB_ID"]
+    if CLUB_FILE.exists():
+        return json.loads(CLUB_FILE.read_text()).get("club_id")
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--club-id", help="32-hex id from padelmates.se/club/<id>")
@@ -148,7 +160,8 @@ def main() -> int:
     ap.add_argument("--fixtures", action="store_true", help="write only tests/fixtures/live_*.json")
     args = ap.parse_args()
 
-    candidates = [args.club_id] if args.club_id else [*discover_ids(), "padium"]
+    club_id = args.club_id or known_club_id()
+    candidates = [club_id] if club_id else [*discover_ids(), "padium"]
     today = datetime.now(LONDON).date()
     saturday = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
     for club_id in candidates:
