@@ -134,7 +134,7 @@ async def test_exact_answer_has_booked_buttons_and_link(club):
     ctx = FakeContext(client)
     answer = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON)
     labels = buttons(bot.offer_keyboard(ctx, client, answer))
-    assert [t for t, _ in labels] == ["📲 Book in Padel Mates", "📌 Court 3 · 60m", "📌 Court 3 · 90m", "📌 Court 8 · 60m"]
+    assert [t for t, _ in labels] == ["📲 Book in Padel Mates", "📌 Ct 3 · 60m", "📌 Ct 3 · 90m", "📌 Ct 8 · 60m"]
     assert labels[0][1] == club.url
 
 
@@ -148,7 +148,7 @@ async def test_booked_button_posts_card_then_players_join_and_pay(club):
     client = fixture_client(club)
     ctx = FakeContext(client)
     answer = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON)
-    data = dict(buttons(bot.offer_keyboard(ctx, client, answer)))["📌 Court 3 · 90m"]
+    data = dict(buttons(bot.offer_keyboard(ctx, client, answer)))["📌 Ct 3 · 90m"]
     chat = FakeMessage()
 
     upd, q = tap(data, 1, "Anna", chat)
@@ -207,10 +207,10 @@ async def test_indoor_filter_and_range_buttons(club):
                                datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON, finder.Want("indoor"))
     assert "Court 8" not in a.text
     labels = [t for t, _ in buttons(bot.offer_keyboard(ctx, client, a))]
-    assert labels == ["📲 Book in Padel Mates", "📌 17:00 Court 1 · 90m", "📌 18:00 Court 3 · 60m", "📌 18:00 Court 3 · 90m"]
+    assert labels == ["📲 Book in Padel Mates", "📌 17:00 Ct 1 · 90m", "📌 18:00 Ct 3 · 60m", "📌 18:00 Ct 3 · 90m"]
 
     # the 📌 under a range books the right start time
-    data = dict(buttons(bot.offer_keyboard(ctx, client, a)))["📌 17:00 Court 1 · 90m"]
+    data = dict(buttons(bot.offer_keyboard(ctx, client, a)))["📌 17:00 Ct 1 · 90m"]
     chat = FakeMessage()
     upd, q = tap(data, 1, "Anna", chat)
     await bot.on_booked_button(upd, ctx)
@@ -220,3 +220,9 @@ async def test_indoor_filter_and_range_buttons(club):
 async def test_next_indoor_skips_outdoor(club):
     a = await bot.answer_next(fixture_client(club), MON_NOON, finder.Want("outdoor"))
     assert "✅ <b>17:00 free:</b>\n• Court 8 (outdoor) 60 min £60" in a.text
+
+
+def test_short_court_names_fit_a_button():
+    names = ["Centre Court", "Court 1", "Babolat Court 2", "Checkout.com Court 4", "Oysho Court 5",
+             "Outdoor Court 7", "Outdoor Court 8"]
+    assert [bot.short_court(n) for n in names] == ["Centre", "Ct 1", "Ct 2", "Ct 4", "Ct 5", "Ct 7", "Ct 8"]

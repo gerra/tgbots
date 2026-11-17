@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
@@ -166,12 +167,24 @@ def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient,
         ]
         key = remember_offers(context, choices)
         for when, o in offers:
-            label = f"{finder.fmt_time(when)} {o.court.name}" if several_times else o.court.name
+            court = short_court(o.court.name)
+            label = f"{finder.fmt_time(when)} {court}" if several_times else court
             rows.append([
                 InlineKeyboardButton(f"📌 {label} · {minutes}m", callback_data=f"bk:{key}:{i}")
                 for i, (w, name, _, minutes, _) in enumerate(choices) if w == when and name == o.court.name
             ])
     return InlineKeyboardMarkup(rows)
+
+
+def short_court(name: str) -> str:
+    """A court name short enough for half a button row on a phone.
+
+    "Outdoor Court 8" -> "Ct 8", "Checkout.com Court 4" -> "Ct 4", "Centre Court" -> "Centre".
+    The reply above the buttons and the game card keep the full name.
+    """
+    if m := re.search(r"(\d+)\s*$", name):
+        return f"Ct {m.group(1)}"
+    return name.split()[0][:10] if name.strip() else name
 
 
 def remember_offers(context: ContextTypes.DEFAULT_TYPE, choices: list[tuple]) -> str:
