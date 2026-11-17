@@ -35,7 +35,7 @@ from telegram.ext import (
 
 import finder
 import games
-from padelmates import BookingSiteError, PadelMatesClient, ShapeError, load_club
+from padelmates import BookingSiteError, Court, PadelMatesClient, ShapeError, load_club
 from parser import LONDON, NextQuery, ParseError, RangeQuery, parse
 
 log = logging.getLogger("padel")
@@ -167,7 +167,7 @@ def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient,
         ]
         key = remember_offers(context, choices)
         for when, o in offers:
-            court = short_court(o.court.name)
+            court = short_court(o.court)
             label = f"{finder.fmt_time(when)} {court}" if several_times else court
             rows.append([
                 InlineKeyboardButton(f"📌 {label} · {minutes}m", callback_data=f"bk:{key}:{i}")
@@ -176,15 +176,19 @@ def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient,
     return InlineKeyboardMarkup(rows)
 
 
-def short_court(name: str) -> str:
-    """A court name short enough for half a button row on a phone.
+def short_court(court: Court) -> str:
+    """A court name short enough for half a button row on a phone, 🌤 if it's outdoor.
 
-    "Outdoor Court 8" -> "Ct 8", "Checkout.com Court 4" -> "Ct 4", "Centre Court" -> "Centre".
+    "Outdoor Court 8" -> "Ct 8 🌤", "Checkout.com Court 4" -> "Ct 4", "Centre Court" -> "Centre".
     The reply above the buttons and the game card keep the full name.
     """
+    name = court.name
     if m := re.search(r"(\d+)\s*$", name):
-        return f"Ct {m.group(1)}"
-    return name.split()[0][:10] if name.strip() else name
+        short = f"Ct {m.group(1)}"
+    else:
+        short = name.split()[0][:10] if name.strip() else name
+    outdoor = court.kind == "outdoor" or (court.kind is None and "outdoor" in name.lower())
+    return f"{short} 🌤" if outdoor else short
 
 
 def remember_offers(context: ContextTypes.DEFAULT_TYPE, choices: list[tuple]) -> str:

@@ -134,7 +134,7 @@ async def test_exact_answer_has_booked_buttons_and_link(club):
     ctx = FakeContext(client)
     answer = await bot.answer_slot(client, datetime(2026, 10, 24, 18, tzinfo=LONDON), MON_NOON)
     labels = buttons(bot.offer_keyboard(ctx, client, answer))
-    assert [t for t, _ in labels] == ["📲 Book in Padel Mates", "📌 Ct 3 · 60m", "📌 Ct 3 · 90m", "📌 Ct 8 · 60m"]
+    assert [t for t, _ in labels] == ["📲 Book in Padel Mates", "📌 Ct 3 · 60m", "📌 Ct 3 · 90m", "📌 Ct 8 🌤 · 60m"]
     assert labels[0][1] == club.url
 
 
@@ -223,6 +223,9 @@ async def test_next_indoor_skips_outdoor(club):
 
 
 def test_short_court_names_fit_a_button():
-    names = ["Centre Court", "Court 1", "Babolat Court 2", "Checkout.com Court 4", "Oysho Court 5",
-             "Outdoor Court 7", "Outdoor Court 8"]
-    assert [bot.short_court(n) for n in names] == ["Centre", "Ct 1", "Ct 2", "Ct 4", "Ct 5", "Ct 7", "Ct 8"]
+    from padelmates import Court
+    courts = [Court("a", "Centre Court", "indoor"), Court("b", "Court 1", "indoor"),
+              Court("c", "Babolat Court 2", "indoor"), Court("d", "Checkout.com Court 4", "indoor"),
+              Court("e", "Outdoor Court 7", "outdoor"), Court("f", "Outdoor Court 8", None),
+              Court("g", "Court 9", "outdoor")]
+    assert [bot.short_court(c) for c in courts] == ["Centre", "Ct 1", "Ct 2", "Ct 4", "Ct 7 🌤", "Ct 8 🌤", "Ct 9 🌤"]
