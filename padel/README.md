@@ -37,9 +37,9 @@ long polling.
 • Outdoor Court 7 (outdoor) 60/90 min £80/£120
 Booked one? Tap its 📌 so the group can join and pay you.
 [📲 Book in Padel Mates]
-[📌 Centre · 60m] [📌 Centre · 90m]
-[📌 Ct 3 · 60m]
-[📌 Ct 7 🌤 · 60m] [📌 Ct 7 🌤 · 90m]
+[📌 In C · 60m] [📌 In C · 90m]
+[📌 In 3 · 60m]
+[📌 Out 7 · 60m] [📌 Out 7 · 90m]
 ```
 
 ### Booking link
@@ -50,7 +50,7 @@ Booked one? Tap its 📌 so the group can join and pay you.
 
 Padel Mates won't tell a bot who booked or paid without the booker's login, so the group tells the bot:
 
-1. After booking in the app, tap that court's 📌 under the `/padel` answer. Buttons use short court names so two fit on a phone row: `Ct 7 🌤` for Outdoor Court 7 (🌤 = outdoor), `Ct 3` for Court 3, `Centre` for Centre Court. For a booking made some other way, use `/booked sat 18:00 court 3 90 £120`.
+1. After booking in the app, tap that court's 📌 under the `/padel` answer. Buttons use short court names so two fit on a phone row: `Out 7` for Outdoor Court 7, `In 3` for Court 3, `In C` for Centre Court. For a booking made some other way, use `/booked sat 18:00 court 3 90 £120`.
 2. The bot posts a game card:
    ```
    🎾 Sat 24 Oct 18:00 · Court 3 (indoor) · 90 min

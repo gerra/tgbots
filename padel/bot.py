@@ -177,18 +177,17 @@ def offer_keyboard(context: ContextTypes.DEFAULT_TYPE, client: PadelMatesClient,
 
 
 def short_court(court: Court) -> str:
-    """A court name short enough for half a button row on a phone, 🌤 if it's outdoor.
+    """A court name short enough for half a button row on a phone: In/Out plus its number.
 
-    "Outdoor Court 8" -> "Ct 8 🌤", "Checkout.com Court 4" -> "Ct 4", "Centre Court" -> "Centre".
+    "Outdoor Court 8" -> "Out 8", "Court 3" -> "In 3", "Centre Court" -> "In C".
     The reply above the buttons and the game card keep the full name.
     """
-    name = court.name
-    if m := re.search(r"(\d+)\s*$", name):
-        short = f"Ct {m.group(1)}"
-    else:
-        short = name.split()[0][:10] if name.strip() else name
-    outdoor = court.kind == "outdoor" or (court.kind is None and "outdoor" in name.lower())
-    return f"{short} 🌤" if outdoor else short
+    name = court.name.strip()
+    m = re.search(r"(\d+)$", name)
+    tag = m.group(1) if m else name[:1].upper()
+    kind = court.kind or ("outdoor" if "outdoor" in name.lower() else None)
+    prefix = {"indoor": "In", "outdoor": "Out"}.get(kind, "Ct")
+    return f"{prefix} {tag}"
 
 
 def remember_offers(context: ContextTypes.DEFAULT_TYPE, choices: list[tuple]) -> str:
